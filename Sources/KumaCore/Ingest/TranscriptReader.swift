@@ -3,10 +3,12 @@ import Foundation
 public struct TranscriptInfo: Equatable, Sendable {
     public var model: String?
     public var title: String?
+    public var lastMessage: String?
 
-    public init(model: String? = nil, title: String? = nil) {
+    public init(model: String? = nil, title: String? = nil, lastMessage: String? = nil) {
         self.model = model
         self.title = title
+        self.lastMessage = lastMessage
     }
 }
 
@@ -25,12 +27,16 @@ public enum TranscriptReader {
         var aiTitle: String?
         var customTitle: String?
         for line in lines.reversed() {
-            if info.model != nil, customTitle != nil { break }
+            if info.model != nil, customTitle != nil, info.lastMessage != nil { break }
             guard let v = JSONValue.parse(Data(line)) else { continue }
             switch v["type"]?.string {
             case "assistant":
                 if info.model == nil, let m = v["message"]?["model"]?.string, !m.isEmpty, !m.hasPrefix("<") {
                     info.model = m
+                }
+                if info.lastMessage == nil, let parts = v["message"]?["content"]?.array {
+                    let text = parts.compactMap { $0["type"]?.string == "text" ? $0["text"]?.string : nil }.joined(separator: "\n")
+                    info.lastMessage = nonEmpty(text.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             case "ai-title":
                 if aiTitle == nil { aiTitle = nonEmpty(v["aiTitle"]?.string) }

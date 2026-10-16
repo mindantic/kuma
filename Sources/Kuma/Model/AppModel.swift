@@ -14,10 +14,8 @@ struct ToolStatus: Equatable {
     var hookInstalled: Bool
 }
 
-enum PrefsScope: String, CaseIterable, Identifiable {
-    case session
-    case project
-    var id: String { rawValue }
+extension PrefsScope: Identifiable {
+    public var id: String { rawValue }
 }
 
 enum PrefsSource {
@@ -47,10 +45,11 @@ final class AppModel: ObservableObject {
     var windowOpener: ((String) -> Void)?
     var settingsOpener: (() -> Void)?
 
+    var engine: KumaEngine?
     var mockQueue: [Briefing] = []
     var mockSpeakingTask: Task<Void, Never>?
 
-    init(useMockData: Bool = ProcessInfo.processInfo.environment["KUMA_MOCK"] != "0") {
+    init(useMockData: Bool = ProcessInfo.processInfo.environment["KUMA_MOCK"] == "1" || CommandLine.arguments.contains("--mock")) {
         self.useMockData = useMockData
         loadInitialState()
         settings.launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -117,13 +116,24 @@ final class AppModel: ObservableObject {
         updatePrefs(session: session, prefs: prefs, scope: .session)
     }
 
-    func skipCurrent() { mockSkipCurrent() }
+    func skipCurrent() {
+        guard let engine else { return mockSkipCurrent() }
+        engine.queue.skipCurrent()
+    }
 
-    func clearAll() { mockClearAll() }
+    func clearAll() {
+        guard let engine else { return mockClearAll() }
+        engine.queue.clearAll()
+    }
 
-    func replay(_ briefing: Briefing) { mockEnqueue(briefing.replayCopy()) }
+    func replay(_ briefing: Briefing) { enqueue(briefing.replayCopy()) }
 
-    func testVoice() { mockEnqueue(testBriefing()) }
+    func testVoice() { enqueue(testBriefing()) }
+
+    private func enqueue(_ briefing: Briefing) {
+        guard let engine else { return mockEnqueue(briefing) }
+        engine.enqueueManual(briefing)
+    }
 
     func setVoice(_ voice: String) {
         settings.voice = voice
@@ -163,13 +173,50 @@ final class AppModel: ObservableObject {
         persistSettings()
     }
 
-    func installHooks(_ tool: Tool) { mockInstallHooks(tool) }
+    func installHooks(_ tool: Tool) {
+        guard let engine else { return mockInstallHooks(tool) }
+        runToolChange(tool) { try engine.installHooks(tool) }
+    }
 
-    func uninstallHooks(_ tool: Tool) { mockUninstallHooks(tool) }
+    func uninstallHooks(_ tool: Tool) {
+        guard let engine else { return mockUninstallHooks(tool) }
+        runToolChange(tool) { try engine.uninstallHooks(tool) }
+    }
 
-    func removeHeard() { mockRemoveHeard() }
+    func removeHeard() {
+        guard let engine else { return mockRemoveHeard() }
+        do {
+            _ = try engine.removeHeard()
+            lastError = nil
+        } catch {
+            lastError = "Removing Heard failed: \(error.localizedDescription)"
+        }
+    }
 
-    func installVoice() { mockInstallVoice() }
+    func installVoice() {
+        guard let engine else { return mockInstallVoice() }
+        voiceInstalling = true
+        Task { @MainActor in
+            do {
+                try await engine.installVoice { _ in }
+                lastError = nil
+            } catch {
+                lastError = "Voice install failed: \(error.localizedDescription)"
+            }
+            voiceInstalling = false
+        }
+    }
+
+    private func runToolChange(_ tool: Tool, _ change: () throws -> Void) {
+        toolBusy.insert(tool)
+        defer { toolBusy.remove(tool) }
+        do {
+            try change()
+            lastError = nil
+        } catch {
+            lastError = "\(tool.displayName): \(error.localizedDescription)"
+        }
+    }
 
     func setSummaryModel(_ tool: Tool, model: String) {
         let trimmed = model.trimmingCharacters(in: .whitespaces)
@@ -204,6 +251,7 @@ final class AppModel: ObservableObject {
 
     func quit() {
         mockSpeakingTask?.cancel()
+        engine?.queue.clearAll()
         NSApp.terminate(nil)
     }
 
@@ -212,20 +260,24 @@ final class AppModel: ObservableObject {
     }
 
     private func loadInitialState() {
+        voices = KokoroVoices.catalog.map { VoiceOption(id: $0.id, name: $0.displayName) }
         if useMockData {
             mockLoad()
         } else {
-            voices = MockData.kokoroVoices
+            let engine = KumaEngine()
+            self.engine = engine
+            engine.attach(self)
             refreshPersonas()
         }
     }
 
     private func persistSettings() {
-        mockPersistSettings()
+        guard let engine else { return mockPersistSettings() }
+        engine.updateSettings(settings)
     }
 
     private func builtInPersonas() -> [Persona] {
-        MockData.builtInPersonas
+        PersonaLibrary.all(custom: []).filter(\.isBuiltIn)
     }
 
     private func testBriefing() -> Briefing {

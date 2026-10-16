@@ -84,7 +84,7 @@ final class BrainSummaryTests: XCTestCase {
         XCTAssertTrue(p.contains("Tool: Claude Code"))
         XCTAssertTrue(p.contains("TAIL"))
         XCTAssertFalse(p.contains(String(repeating: "a", count: 4001)))
-        XCTAssertTrue(p.contains("at most one sentence"))
+        XCTAssertTrue(p.contains("at most 18 words"))
         XCTAssertTrue(p.contains("\"priority\""))
     }
 

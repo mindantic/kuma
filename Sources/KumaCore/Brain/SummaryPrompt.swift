@@ -7,8 +7,8 @@ public enum SummaryPrompt {
         let s = request.session
         let e = request.event
         let length = request.verbosity == .line
-            ? "Say at most one sentence."
-            : "Say at most two short sentences."
+            ? "Say one short sentence of at most 18 words."
+            : "Say at most two short sentences, 35 words in total."
         let base = BriefingPolicy.basePriority(for: e.kind) ?? .normal
         var lines: [String] = [
             "You are Kuma, a voice assistant that briefs a busy developer about an AI coding session. Your words will be spoken aloud.",

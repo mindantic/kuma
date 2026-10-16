@@ -38,6 +38,17 @@ public struct Discovery: Sendable {
         return out
     }
 
+    static func claudeTranscript(sessionId: String, sessionsDir: URL) -> URL? {
+        let projects = sessionsDir.deletingLastPathComponent().appendingPathComponent("projects", isDirectory: true)
+        let fm = FileManager.default
+        guard let dirs = try? fm.contentsOfDirectory(at: projects, includingPropertiesForKeys: nil) else { return nil }
+        for dir in dirs {
+            let file = dir.appendingPathComponent("\(sessionId).jsonl")
+            if fm.fileExists(atPath: file.path) { return file }
+        }
+        return nil
+    }
+
     public func claudeSessions(now: Date = Date()) -> [Session] {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: claudeSessionsDir, includingPropertiesForKeys: nil) else { return [] }
@@ -51,14 +62,18 @@ public struct Discovery: Sendable {
             let cwd = obj["cwd"]?.string ?? ""
             let statusSince = Self.date(obj["statusUpdatedAt"]) ?? Self.date(obj["updatedAt"]) ?? Self.date(obj["startedAt"]) ?? now
             let updatedAt = Self.date(obj["updatedAt"]) ?? statusSince
+            let transcript = Self.claudeTranscript(sessionId: id, sessionsDir: claudeSessionsDir).map { TranscriptReader.tail(path: $0.path, maxBytes: 262144) } ?? TranscriptInfo()
             out.append(Session(
                 id: id,
                 tool: .claude,
                 project: namer.name(forCwd: cwd),
                 cwd: cwd,
-                title: obj["name"]?.string,
+                title: transcript.title ?? obj["name"]?.string,
+                model: transcript.model,
+                terminal: nil,
                 status: Self.claudeStatus(obj["status"]?.string),
                 statusSince: statusSince,
+                lastMessage: transcript.lastMessage,
                 updatedAt: updatedAt
             ))
         }

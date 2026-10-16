@@ -8,6 +8,7 @@ const CALL_TIMEOUT_MS = 3000;
 const titles = new Map();
 const parents = new Map();
 const lastStatus = new Map();
+let v2Active = false;
 
 function pick(...values) {
   for (const v of values) {
@@ -223,13 +224,86 @@ async function handle(client, fallbackDirectory, event) {
   send(type, { ...base, detail: permissionText(props) });
 }
 
+async function sessionInfo(ctx, sessionID) {
+  const session = ctx?.session;
+  const get = typeof session?.get === "function" ? session.get.bind(session) : undefined;
+  const info = await tryCall(get, [[{ sessionID }], [{ id: sessionID }], [sessionID]]);
+  return {
+    title: pick(info?.title),
+    directory: pick(info?.directory, info?.location?.directory, info?.path?.cwd, info?.cwd),
+    parent: pick(info?.parentID, info?.parentId),
+  };
+}
+
+function v2Model(model) {
+  if (!model || typeof model !== "object") return pick(model);
+  const id = pick(model.id, model.modelID);
+  const provider = pick(model.providerID);
+  return id && provider ? `${provider}/${id}` : id;
+}
+
+async function setupV2(ctx) {
+  const noop = async () => {};
+  if (typeof ctx?.ui?.router?.current === "function") return noop;
+  if (typeof ctx?.event?.subscribe !== "function" || isGuarded()) return noop;
+  v2Active = true;
+  const controller = new AbortController();
+  const state = new Map();
+  const of = (id) => {
+    let s = state.get(id);
+    if (!s) {
+      s = {};
+      remember(state, id, s);
+    }
+    return s;
+  };
+  const emit = async (event, sessionID, extra) => {
+    const s = of(sessionID);
+    if (!s.info) s.info = await sessionInfo(ctx, sessionID);
+    const title = pick(s.title, s.info.title);
+    if ((title || "").startsWith(SUMMARY_PREFIX)) return;
+    const payload = { session_id: sessionID, directory: pick(s.info.directory, s.directory) || process.cwd(), title, model: s.model, ...extra };
+    if (s.info.parent) {
+      if (event !== "session.idle") return;
+      payload.session_id = s.info.parent;
+      payload.agent_type = "subagent";
+    }
+    send(event, payload);
+  };
+  const consume = async () => {
+    for await (const input of ctx.event.subscribe({ signal: controller.signal })) {
+      try {
+        const type = input?.type;
+        const data = input?.data || {};
+        const id = pick(data.sessionID, data.form?.sessionID);
+        if (!id) continue;
+        const s = of(id);
+        if (data.directory) s.directory = pick(data.directory);
+        if (type === "session.renamed") s.title = pick(data.title, data.name, s.title);
+        else if (type === "session.step.started") s.model = v2Model(data.model) || s.model;
+        else if (type === "session.text.started") s.text = "";
+        else if (type === "session.text.ended") s.text = pick(data.text, s.text);
+        else if (type === "session.execution.started") {
+          s.text = "";
+          await emit("session.status", id, { status: "busy" });
+        } else if (type === "session.execution.succeeded") await emit("session.idle", id, { message: s.text || undefined });
+        else if (type === "session.execution.failed") await emit("session.error", id, { detail: pick(data.error?.message, data.message, "The run failed") });
+        else if (type === "permission.asked") await emit("permission.asked", id, { detail: permissionText({ ...data, permission: data.action, patterns: data.resources }) });
+        else if (type === "form.created") await emit("question.asked", id, { detail: pick(data.form?.title, data.form?.fields?.[0]?.description, data.form?.fields?.[0]?.title) });
+      } catch {}
+    }
+  };
+  consume().catch(() => {});
+  return async () => controller.abort();
+}
+
 export const Kuma = async (ctx) => {
   const client = ctx?.client;
   const directory = typeof ctx?.directory === "string" ? ctx.directory : process.cwd();
   return {
     event: async (input) => {
       try {
-        if (isGuarded()) return;
+        if (isGuarded() || v2Active) return;
         handle(client, directory, input?.event).catch(() => {});
       } catch {}
     },
@@ -239,4 +313,5 @@ export const Kuma = async (ctx) => {
 export default process.env.KUMA_OPENCODE_PLUGIN_API === "v1" ? Kuma : {
   id: "kuma",
   server: Kuma,
+  setup: setupV2,
 };

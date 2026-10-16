@@ -9,6 +9,10 @@ let toolArg = arguments.count > 1 ? arguments[1].lowercased() : ""
 let eventArg = arguments.count > 2 ? arguments[2] : ""
 let tool = Tool(rawValue: toolArg) ?? .other
 
+if toolArg == "admin" {
+    exit(Admin.run(Array(arguments.dropFirst(2))))
+}
+
 if tool == .codex, eventArg == "Stop" {
     FileHandle.standardOutput.write(Data("{}\n".utf8))
 }

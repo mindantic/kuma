@@ -127,7 +127,8 @@ final class IngestHeardTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: realSettings), realSettingsBefore)
 
         let installer = HookInstaller(paths: .init(claudeSettings: settings, codexHooks: codex, cursorHooks: dir.appendingPathComponent("cursor.json"), opencodePlugin: dir.appendingPathComponent("kuma.js")))
-        let afterHeard = text
+        try installer.uninstall(.claude)
+        let afterHeard = try String(contentsOf: settings, encoding: .utf8)
         try installer.install(.claude, hookBinary: "/Applications/Kuma.app/Contents/MacOS/kuma-hook")
         try installer.uninstall(.claude)
         XCTAssertEqual(try String(contentsOf: settings, encoding: .utf8), afterHeard)
