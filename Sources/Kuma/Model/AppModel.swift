@@ -38,9 +38,9 @@ final class AppModel: ObservableObject {
     @Published var toolStatus: [Tool: ToolStatus] = [:]
     @Published var voiceReady = false
     @Published var voiceInstalling = false
-    @Published var heardDetected = false
     @Published var toolBusy: Set<Tool> = []
     @Published var lastError: String?
+    @Published var skipShortcut: HotKey = AppModel.loadSkipShortcut()
 
     var windowOpener: ((String) -> Void)?
     var settingsOpener: (() -> Void)?
@@ -183,16 +183,6 @@ final class AppModel: ObservableObject {
         runToolChange(tool) { try engine.uninstallHooks(tool) }
     }
 
-    func removeHeard() {
-        guard let engine else { return mockRemoveHeard() }
-        do {
-            _ = try engine.removeHeard()
-            lastError = nil
-        } catch {
-            lastError = "Removing Heard failed: \(error.localizedDescription)"
-        }
-    }
-
     func installVoice() {
         guard let engine else { return mockInstallVoice() }
         voiceInstalling = true
@@ -216,6 +206,16 @@ final class AppModel: ObservableObject {
         } catch {
             lastError = "\(tool.displayName): \(error.localizedDescription)"
         }
+    }
+
+    func setSkipShortcut(_ key: HotKey) {
+        skipShortcut = key
+        if let data = try? JSONEncoder().encode(key) { UserDefaults.standard.set(data, forKey: "skipShortcut") }
+    }
+
+    private static func loadSkipShortcut() -> HotKey {
+        guard let data = UserDefaults.standard.data(forKey: "skipShortcut"), let key = try? JSONDecoder().decode(HotKey.self, from: data) else { return .default }
+        return key
     }
 
     func setSummaryModel(_ tool: Tool, model: String) {

@@ -96,122 +96,194 @@ struct SessionDetailView: View {
     }
 }
 
+private enum SpeakLevel: Hashable {
+    case everything, important, muted
+}
+
 struct PrefsEditor: View {
     @ObservedObject var model: AppModel
     let session: Session
     @State private var draft = SessionPrefs()
-    @State private var scope: PrefsScope = .session
-    @State private var loaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
                 Text("Behavior").font(.headline)
+                Text(sourceText)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(source == .defaults ? Color.secondary : KumaTheme.purple)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(source == .defaults ? Color.primary.opacity(0.06) : KumaTheme.purple.opacity(0.14)))
                 Spacer()
-                Text(sourceText).font(.caption).foregroundStyle(.secondary)
+                if source != .defaults {
+                    Button("Reset to defaults") { reset() }
+                        .buttonStyle(.link)
+                        .font(.callout)
+                }
             }
-            VStack(alignment: .leading, spacing: 12) {
-                Picker("Apply to", selection: $scope) {
-                    Text("This session").tag(PrefsScope.session)
-                    Text("All sessions in \(session.project)").tag(PrefsScope.project)
-                }
-                .pickerStyle(.segmented)
 
-                HStack(spacing: 20) {
-                    Toggle("Mute", isOn: $draft.muted)
-                    Toggle("High priority only", isOn: $draft.highOnly)
-                        .disabled(draft.muted)
-                }
-
-                Picker("Verbosity", selection: $draft.verbosity) {
-                    Text("One line").tag(Verbosity.line)
-                    Text("Short summary").tag(Verbosity.summary)
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 320)
-
-                HStack(spacing: 16) {
-                    Picker("Persona", selection: $draft.personaId) {
-                        Text("Global default").tag(String?.none)
-                        Divider()
-                        ForEach(model.personas) { Text($0.name).tag(String?.some($0.id)) }
+            VStack(spacing: 0) {
+                row("Speak", symbol: "speaker.wave.2") {
+                    Picker("Speak", selection: level) {
+                        Text("Everything").tag(SpeakLevel.everything)
+                        Text("Important").tag(SpeakLevel.important)
+                        Text("Muted").tag(SpeakLevel.muted)
                     }
-                    .frame(maxWidth: 240)
-                    Picker("Voice", selection: $draft.voice) {
-                        Text("Persona voice").tag(String?.none)
-                        Divider()
-                        ForEach(model.voices) { Text($0.name).tag(String?.some($0.id)) }
-                    }
-                    .frame(maxWidth: 260)
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 260)
                 }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Speak when").font(.subheadline).foregroundStyle(.secondary)
-                    HStack(spacing: 16) {
-                        Toggle("Finished", isOn: $draft.speakFinished)
-                        Toggle("Approvals", isOn: $draft.speakApprovals)
-                        Toggle("Questions", isOn: $draft.speakQuestions)
-                        Toggle("Errors", isOn: $draft.speakErrors)
-                        Toggle("Subagents", isOn: $draft.speakSubagents)
+                Group {
+                    Divider().padding(.leading, 40)
+                    row("Detail", symbol: "text.alignleft") {
+                        Picker("Detail", selection: $draft.verbosity) {
+                            Text("One line").tag(Verbosity.line)
+                            Text("Short summary").tag(Verbosity.summary)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 260)
                     }
-                    .toggleStyle(.checkbox)
+                    Divider().padding(.leading, 40)
+                    row("Persona", symbol: "theatermasks") {
+                        Picker("Persona", selection: $draft.personaId) {
+                            Text("Default (\(model.activePersona?.name ?? "Kuma"))").tag(String?.none)
+                            Divider()
+                            ForEach(model.personas) { Text($0.name).tag(String?.some($0.id)) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 260)
+                    }
+                    Divider().padding(.leading, 40)
+                    row("Voice", symbol: "waveform") {
+                        Picker("Voice", selection: $draft.voice) {
+                            Text("Match persona").tag(String?.none)
+                            Divider()
+                            ForEach(model.voices) { Text($0.name).tag(String?.some($0.id)) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 260)
+                    }
+                    Divider().padding(.leading, 40)
+                    VStack(alignment: .leading, spacing: 8) {
+                        label("Speak about", symbol: "bell")
+                        HStack(spacing: 6) {
+                            chip("Finished", isOn: $draft.speakFinished)
+                            chip("Approvals", isOn: $draft.speakApprovals)
+                            chip("Questions", isOn: $draft.speakQuestions)
+                            chip("Errors", isOn: $draft.speakErrors)
+                            chip("Subagents", isOn: $draft.speakSubagents)
+                        }
+                        .padding(.leading, 28)
+                    }
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .disabled(draft.muted)
-
-                HStack {
-                    Button("Reset to defaults") {
-                        model.resetPrefs(session: session, scope: scope)
-                        reload()
-                    }
-                    .disabled(!canReset)
-                    Spacer()
-                    Button("Revert") { reload() }
-                        .disabled(draft == model.prefs(for: session))
-                    Button("Apply") {
-                        model.updatePrefs(session: session, prefs: draft, scope: scope)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(draft == model.prefs(for: session) && scopeMatchesSource)
-                }
+                .opacity(draft.muted ? 0.45 : 1)
             }
-            .padding(14)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 4)
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.08)))
+
+            Toggle(isOn: projectWide) {
+                Text("Use for every session in \(session.project)")
+                    .font(.callout)
+            }
+            .toggleStyle(.checkbox)
+            .padding(.leading, 2)
+            .padding(.top, 2)
         }
-        .onAppear {
-            guard !loaded else { return }
-            loaded = true
-            reload()
-        }
+        .onAppear { draft = model.prefs(for: session) }
         .onChange(of: model.prefs(for: session)) { _, newValue in
-            draft = newValue
+            if draft != newValue { draft = newValue }
+        }
+        .onChange(of: draft) { _, newValue in
+            guard newValue != model.prefs(for: session) else { return }
+            model.updatePrefs(session: session, prefs: newValue, scope: source == .project ? .project : .session)
         }
     }
+
+    private func row<Control: View>(_ title: String, symbol: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack {
+            label(title, symbol: symbol)
+            Spacer(minLength: 12)
+            control()
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func label(_ title: String, symbol: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .foregroundStyle(KumaTheme.purple)
+                .frame(width: 18)
+            Text(title)
+        }
+    }
+
+    private func chip(_ title: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                if isOn.wrappedValue {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+                }
+                Text(title)
+            }
+            .font(.callout)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .foregroundStyle(isOn.wrappedValue ? KumaTheme.purple : Color.secondary)
+            .background(Capsule().fill(isOn.wrappedValue ? KumaTheme.purple.opacity(0.16) : Color.primary.opacity(0.05)))
+            .overlay(Capsule().strokeBorder(isOn.wrappedValue ? KumaTheme.purple.opacity(0.4) : Color.primary.opacity(0.1)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var level: Binding<SpeakLevel> {
+        Binding(
+            get: { draft.muted ? .muted : draft.highOnly ? .important : .everything },
+            set: { value in
+                draft.muted = value == .muted
+                draft.highOnly = value == .important
+            }
+        )
+    }
+
+    private var projectWide: Binding<Bool> {
+        Binding(
+            get: { source == .project },
+            set: { on in
+                if on {
+                    model.updatePrefs(session: session, prefs: draft, scope: .project)
+                } else {
+                    let current = draft
+                    model.resetPrefs(session: session, scope: .project)
+                    if current != model.settings.defaultPrefs {
+                        model.updatePrefs(session: session, prefs: current, scope: .session)
+                    }
+                }
+            }
+        )
+    }
+
+    private var source: PrefsSource { model.prefsSource(for: session) }
 
     private var sourceText: String {
-        switch model.prefsSource(for: session) {
-        case .session: return "Using settings for this session"
-        case .project: return "Using settings for \(session.project)"
-        case .defaults: return "Using global defaults"
+        switch source {
+        case .session: return "Custom for this session"
+        case .project: return "Shared with \(session.project)"
+        case .defaults: return "Defaults"
         }
     }
 
-    private var scopeMatchesSource: Bool {
-        switch (model.prefsSource(for: session), scope) {
-        case (.session, .session), (.project, .project): return true
-        default: return false
-        }
-    }
-
-    private var canReset: Bool {
-        switch scope {
-        case .session: return model.settings.sessionPrefs[session.id] != nil
-        case .project: return model.settings.projectPrefs[session.project] != nil
-        }
-    }
-
-    private func reload() {
+    private func reset() {
+        model.resetPrefs(session: session, scope: source == .project ? .project : .session)
         draft = model.prefs(for: session)
-        scope = model.prefsSource(for: session) == .project ? .project : .session
     }
 }

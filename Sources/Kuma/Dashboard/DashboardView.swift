@@ -113,7 +113,7 @@ struct DashboardView: View {
                         .id(session.id)
                 } else {
                     VStack(spacing: 8) {
-                        Image(systemName: "pawprint").font(.largeTitle).foregroundStyle(.tertiary)
+                        KumaLogo(size: 56).opacity(0.85)
                         Text("Select a session").foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

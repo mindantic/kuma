@@ -11,6 +11,24 @@ enum KumaTheme {
     }
     static let purple = Color(nsColor: nsPurple)
     static let deepPurple = Color(.sRGB, red: 0.38, green: 0.19, blue: 0.44, opacity: 1)
+
+    static let logo: NSImage = {
+        if let url = ResourceLocator.asset("app-icon.png"), let image = NSImage(contentsOf: url) { return image }
+        return NSApp.applicationIconImage
+    }()
+}
+
+struct KumaLogo: View {
+    var size: CGFloat = 20
+
+    var body: some View {
+        Image(nsImage: KumaTheme.logo)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+            .accessibilityLabel("Kuma")
+    }
 }
 
 extension SessionStatus {

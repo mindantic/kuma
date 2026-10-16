@@ -10,7 +10,6 @@ extension AppModel {
         toolStatus = MockData.toolStatus
         recentBriefings = MockData.recentBriefings(from: sessions, voice: settings.voice)
         voiceReady = true
-        heardDetected = true
     }
 
     func mockPersistSettings() {}
@@ -43,10 +42,6 @@ extension AppModel {
 
     func mockUninstallHooks(_ tool: Tool) {
         mockRunToolChange(tool) { $0.hookInstalled = false }
-    }
-
-    func mockRemoveHeard() {
-        heardDetected = false
     }
 
     func mockInstallVoice() {

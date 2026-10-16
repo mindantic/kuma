@@ -27,7 +27,6 @@ final class KumaEngine {
     let sessionStore = SessionStore()
     let history = HistoryStore()
     let installer = HookInstaller()
-    let heard = HeardRemover()
     let locator = ToolLocator.shared
     let voiceSetup = VoiceSetup()
     let voice: FallbackVoice
@@ -100,7 +99,6 @@ final class KumaEngine {
             status[tool] = ToolStatus(binaryFound: locator.isInstalled(tool), hookInstalled: installer.isInstalled(tool))
         }
         model.toolStatus = status
-        model.heardDetected = heard.isHeardPresent
     }
 
     func installHooks(_ tool: Tool) throws {
@@ -112,12 +110,6 @@ final class KumaEngine {
     func uninstallHooks(_ tool: Tool) throws {
         try installer.uninstall(tool)
         refreshTools()
-    }
-
-    func removeHeard() throws -> [String] {
-        let changes = try heard.apply()
-        refreshTools()
-        return changes
     }
 
     func installVoice(progress: @escaping @Sendable (String) -> Void) async throws {

@@ -1,8 +1,10 @@
+import AppKit
+import Carbon.HIToolbox
 import KumaCore
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable {
-    case general, voice, personality, tools, heard, shortcuts
+    case general, voice, personality, tools, shortcuts
 }
 
 struct SettingsView: View {
@@ -23,10 +25,7 @@ struct SettingsView: View {
             ToolsSettings(model: model)
                 .tabItem { Label("Tools", systemImage: "hammer") }
                 .tag(SettingsTab.tools)
-            HeardSettings(model: model)
-                .tabItem { Label("Heard", systemImage: "ear") }
-                .tag(SettingsTab.heard)
-            ShortcutsSettings()
+            ShortcutsSettings(model: model)
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
                 .tag(SettingsTab.shortcuts)
         }
@@ -301,65 +300,97 @@ private struct ToolRow: View {
     }
 }
 
-private struct HeardSettings: View {
-    @ObservedObject var model: AppModel
-    @State private var confirming = false
-
-    var body: some View {
-        Form {
-            Section {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: model.heardDetected ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(model.heardDetected ? .orange : .green)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(model.heardDetected ? "Heard hooks detected" : "Heard is not installed")
-                            .font(.body.weight(.medium))
-                        Text(model.heardDetected
-                            ? "Heard also speaks your Claude Code sessions, so you would hear every update twice. Kuma replaces it."
-                            : "Nothing to clean up. Kuma is the only voice for your sessions.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                if model.heardDetected {
-                    HStack {
-                        Spacer()
-                        Button("Remove Heard", role: .destructive) { confirming = true }
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .frame(height: 220)
-        .confirmationDialog("Remove Heard?", isPresented: $confirming) {
-            Button("Remove Heard", role: .destructive) { model.removeHeard() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the Heard hooks from your Claude Code settings. A backup of the settings file is kept.")
-        }
-    }
-}
-
 private struct ShortcutsSettings: View {
+    @ObservedObject var model: AppModel
+
     var body: some View {
         Form {
             Section {
                 LabeledContent("Skip the current briefing") {
-                    KeyCaps(keys: ["⌥", "esc"])
+                    ShortcutRecorder(hotKey: Binding(get: { model.skipShortcut }, set: { model.setSkipShortcut($0) }))
                 }
                 LabeledContent("Clear all briefings") {
                     Text("Click the x on the paw bubble").foregroundStyle(.secondary)
                 }
             }
             Section {
-                Text("Option and Escape only works while Kuma is speaking. Plain Escape is left alone so you can still interrupt Claude Code.")
+                Text("Click the shortcut and press a new one. It needs Command, Option or Control, and only works while Kuma is speaking.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(height: 210)
+        .frame(height: 220)
+    }
+}
+
+private struct ShortcutRecorder: View {
+    @Binding var hotKey: HotKey
+    @State private var recording = false
+    @State private var monitor: Any?
+    @State private var rejected = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button {
+                recording ? stop() : start()
+            } label: {
+                Group {
+                    if recording {
+                        Text(rejected ? "Add a modifier" : "Type a shortcut")
+                            .font(.callout)
+                            .foregroundStyle(rejected ? Color.orange : KumaTheme.purple)
+                    } else {
+                        KeyCaps(keys: hotKey.symbols)
+                    }
+                }
+                .frame(minWidth: 120, minHeight: 24)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(recording ? 0.08 : 0.03)))
+            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(recording ? KumaTheme.purple : Color.primary.opacity(0.12), lineWidth: recording ? 1.5 : 1))
+            .help(recording ? "Press the new shortcut, Esc cancels" : "Click to record a new shortcut")
+            Button {
+                stop()
+                hotKey = .default
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+            }
+            .buttonStyle(.borderless)
+            .help("Reset to \(HotKey.default.label)")
+            .opacity(hotKey == .default ? 0 : 1)
+            .disabled(hotKey == .default)
+        }
+        .onDisappear { stop() }
+    }
+
+    private func start() {
+        rejected = false
+        recording = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            if event.keyCode == UInt16(kVK_Escape), flags.isEmpty {
+                stop()
+                return nil
+            }
+            if let key = HotKey.from(event) {
+                hotKey = key
+                stop()
+            } else {
+                rejected = true
+                NSSound.beep()
+            }
+            return nil
+        }
+    }
+
+    private func stop() {
+        recording = false
+        rejected = false
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
     }
 }
 

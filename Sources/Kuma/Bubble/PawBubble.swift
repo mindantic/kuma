@@ -49,7 +49,7 @@ final class PawBubbleController {
             hide()
             return
         }
-        let view = PawBubbleView(briefing: briefing, pendingCount: pending, onSkip: { [weak model] in model?.skipCurrent() }, onClear: { [weak model] in model?.clearAll() })
+        let view = PawBubbleView(briefing: briefing, pendingCount: pending, shortcut: model.skipShortcut.label, onSkip: { [weak model] in model?.skipCurrent() }, onClear: { [weak model] in model?.clearAll() })
         if let hosting {
             hosting.rootView = view
         } else {
@@ -97,17 +97,12 @@ final class PawBubbleController {
 }
 
 struct PawBubbleView: View {
-    static let appIcon: NSImage = {
-        if let url = Bundle.main.url(forResource: "app-icon", withExtension: "png"), let image = NSImage(contentsOf: url) { return image }
-        return NSApp.applicationIconImage
-    }()
-
     let briefing: Briefing
     let pendingCount: Int
+    let shortcut: String
     let onSkip: () -> Void
     let onClear: () -> Void
     @State private var hoveringClear = false
-    @State private var pulse = false
 
     var body: some View {
         content(briefing)
@@ -116,24 +111,17 @@ struct PawBubbleView: View {
 
     private func content(_ briefing: Briefing) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(KumaTheme.purple.opacity(0.5), lineWidth: 2)
-                    .frame(width: 44, height: 44)
-                    .scaleEffect(pulse ? 1.22 : 1)
-                    .opacity(pulse ? 0 : 1)
-                Image(nsImage: PawBubbleView.appIcon)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 44, height: 44)
-            }
+            KumaLogo(size: 44)
+                .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(briefing.project)
                         .font(.system(size: 12, weight: .semibold))
-                    Text(briefing.tool == .other ? "Kuma" : briefing.tool.displayName)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                    if briefing.tool != .other {
+                        Text(briefing.tool.displayName)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
                     if briefing.priority == .high {
                         Circle().fill(Color.orange).frame(width: 6, height: 6)
                     }
@@ -155,9 +143,9 @@ struct PawBubbleView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, 16)
+        .padding(.leading, 14)
         .padding(.trailing, 36)
-        .padding(.vertical, 16)
+        .padding(.vertical, 14)
         .frame(minWidth: 320, maxWidth: 500, alignment: .leading)
         .fixedSize()
         .background(
@@ -186,10 +174,6 @@ struct PawBubbleView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .onTapGesture { onSkip() }
-        .help("Click to skip, Option Esc also skips")
-        .onAppear {
-            pulse = false
-            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulse = true }
-        }
+        .help("Click to skip, \(shortcut) also skips")
     }
 }

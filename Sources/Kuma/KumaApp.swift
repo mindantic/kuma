@@ -54,7 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.$current
             .map { $0 != nil }
             .removeDuplicates()
-            .sink { active in active ? hotKey.register() : hotKey.unregister() }
+            .combineLatest(model.$skipShortcut.removeDuplicates())
+            .sink { active, key in hotKey.update(active: active, key: key) }
             .store(in: &cancellables)
         SingleInstance.observe { [weak self] in self?.model.openDashboard() }
     }

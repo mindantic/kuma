@@ -21,7 +21,7 @@ More in [docs/screenshots](docs/screenshots).
 - Menu bar dropdown with every session sorted by urgency, plus a full dashboard window.
 - Modes: Enabled, Do Not Disturb (only high priority is spoken) and Disabled.
 - Per session control: mute, high priority only, one line or short summary, persona or voice override, and which events speak (finished, approvals, questions, errors, subagents). Apply it to one session or to every session in the project.
-- Briefings are stacked and read one after another. While Kuma speaks, a paw bubble shows at the bottom of the screen. Click it to skip, click the small x to clear the stack, or press Option and Esc from anywhere.
+- Briefings are stacked and read one after another. While Kuma speaks, a paw bubble shows at the bottom of the screen. Click it to skip, click the small x to clear the stack, or press Command and Esc from anywhere. The shortcut can be changed in Settings, Shortcuts.
 - Local Kokoro voice, nothing leaves your Mac.
 
 ## Requirements
@@ -48,7 +48,7 @@ Set `KUMA_MOCK=0` to start without mock data. Useful launch flags while developi
 
 ## Permissions
 
-- No Accessibility permission is needed. The Option and Esc shortcut uses a Carbon hot key, registered only while Kuma is speaking. Plain Esc is never captured, so you can still interrupt Claude Code.
+- No Accessibility permission is needed. The skip shortcut uses a Carbon hot key, registered only while Kuma is speaking. Plain Esc is never captured, so you can still interrupt Claude Code.
 - Launch at login uses the system login items service. You can review it in System Settings, General, Login Items.
 - The app is signed ad hoc. On first launch macOS may ask you to confirm opening it: right click Kuma.app and choose Open.
 
@@ -58,13 +58,13 @@ Kuma installs a small hook into each tool you enable (Settings, Tools). When the
 
 Kuma then asks the same tool the session runs to write a one line summary (Claude Code summarizes Claude Code sessions, and so on), queues a briefing and speaks it. Summary calls are tagged so they never trigger hooks themselves. Remove the hooks any time from Settings, Tools.
 
-If you used Heard before, Settings, Heard can remove its hooks so you do not hear every update twice.
+If you used Heard before, run `kuma-hook admin remove-heard` once so you do not hear every update twice.
 
 ## Troubleshooting
 
 - **No icon in the menu bar:** on a crowded menu bar macOS hides extra icons behind the notch. Quit a few menu bar apps or use a menu bar manager.
 - **Sessions do not appear:** check Settings, Tools. The tool binary must be found and the hooks installed. Restart the agent session after installing hooks.
 - **No voice:** Settings, Voice shows the Kokoro status. Use Install if it is missing, then Test voice. Check the mode is not Disabled.
-- **Option and Esc does nothing:** another app may own that shortcut. The bubble still skips on click.
+- **The skip shortcut does nothing:** another app may own that shortcut, record a different one in Settings, Shortcuts. The bubble still skips on click.
 - **Two copies running:** Kuma allows a single instance. Launching it again opens the dashboard of the running copy.
 - **Logs:** `~/Library/Application Support/Kuma/kuma.log`.

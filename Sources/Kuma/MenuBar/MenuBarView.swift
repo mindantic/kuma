@@ -36,8 +36,7 @@ struct MenuBarView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "pawprint.fill")
-                    .foregroundStyle(KumaTheme.purple)
+                KumaLogo(size: 22)
                 Text("Kuma")
                     .font(.headline)
                 Spacer()
