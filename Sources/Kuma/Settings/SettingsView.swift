@@ -4,7 +4,7 @@ import KumaCore
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable {
-    case general, personality, tools, shortcuts
+    case general, defaults, personality, tools, shortcuts
 }
 
 struct SettingsView: View {
@@ -16,8 +16,11 @@ struct SettingsView: View {
             GeneralSettings(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(SettingsTab.general)
+            DefaultsSettings(model: model)
+                .tabItem { Label("Defaults", systemImage: "slider.horizontal.3") }
+                .tag(SettingsTab.defaults)
             PersonalitySettings(model: model)
-                .tabItem { Label("Personality", systemImage: "theatermasks") }
+                .tabItem { Label("Personality", systemImage: "person.crop.circle") }
                 .tag(SettingsTab.personality)
             ToolsSettings(model: model)
                 .tabItem { Label("Tools", systemImage: "hammer") }
@@ -81,6 +84,44 @@ private struct GeneralSettings: View {
         case .dnd: return "Only high priority briefings are spoken, such as approvals, questions and errors. Everything still shows in the dashboard."
         case .disabled: return "Kuma stays silent. Sessions are still tracked in the dashboard."
         }
+    }
+}
+
+private struct DefaultsSettings: View {
+    @ObservedObject var model: AppModel
+    @State private var draft = SessionPrefs()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Session defaults").font(.headline)
+                    Text("Every session uses these until you change it in the dashboard.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Restore defaults") { draft = .default }
+                    .disabled(draft == .default)
+            }
+            BehaviorPanel(model: model, draft: $draft, inheritLabel: "Active personality (\(model.activePersona?.name ?? "Kuma"))")
+            if customCount > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                    Text(customCount == 1 ? "1 session or project has its own settings and keeps them." : "\(customCount) sessions or projects have their own settings and keep them.")
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(20)
+        .frame(height: 350, alignment: .top)
+        .onAppear { draft = model.settings.defaultPrefs }
+        .onChange(of: draft) { _, value in model.setDefaultPrefs(value) }
+    }
+
+    private var customCount: Int {
+        model.settings.sessionPrefs.count + model.settings.projectPrefs.count
     }
 }
 

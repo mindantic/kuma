@@ -115,6 +115,17 @@ final class AppModel: ObservableObject {
         persistSettings()
     }
 
+    func setDefaultPrefs(_ prefs: SessionPrefs) {
+        guard prefs != settings.defaultPrefs else { return }
+        settings.defaultPrefs = prefs
+        persistSettings()
+    }
+
+    func openSettings(tab: String) {
+        UserDefaults.standard.set(tab, forKey: "settingsTab")
+        openSettings()
+    }
+
     func resetPrefs(session: Session, scope: PrefsScope) {
         switch scope {
         case .session: settings.sessionPrefs[session.id] = nil
