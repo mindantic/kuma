@@ -31,6 +31,19 @@ struct KumaLogo: View {
     }
 }
 
+extension Session {
+    var isScratch: Bool {
+        let temp = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().path
+        let path = URL(fileURLWithPath: cwd).resolvingSymlinksInPath().path
+        return ["/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/", temp + "/"].contains { path.hasPrefix($0) || path + "/" == $0 }
+    }
+
+    var displayFolder: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return cwd.hasPrefix(home) ? "~" + cwd.dropFirst(home.count) : cwd
+    }
+}
+
 extension SessionStatus {
     var color: Color {
         switch self {
@@ -72,6 +85,22 @@ extension Tool {
 }
 
 extension Mode {
+    var tint: Color {
+        switch self {
+        case .enabled: return .green
+        case .dnd: return .indigo
+        case .disabled: return .secondary
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .enabled: return "Speaks every briefing"
+        case .dnd: return "Only approvals, questions and errors"
+        case .disabled: return "Silent, still tracking"
+        }
+    }
+
     var shortLabel: String {
         switch self {
         case .enabled: return "On"

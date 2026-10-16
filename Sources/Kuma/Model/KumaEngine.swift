@@ -152,6 +152,7 @@ final class KumaEngine {
 
     func process(_ event: AgentEvent) {
         let session = sessionStore.apply(event)
+        guard !session.isScratch else { return }
         let settings = settingsStore.settings
         let prefs = settings.prefs(sessionId: session.id, project: session.project)
         let decision = BriefingPolicy.decide(event: event, session: session, prefs: prefs, mode: settings.mode, watched: settings.watchedTools)

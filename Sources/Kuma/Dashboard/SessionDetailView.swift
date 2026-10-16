@@ -13,8 +13,12 @@ struct SessionDetailView: View {
                 if let pending = session.pendingDetail {
                     callout(title: "Waiting on", text: pending, color: session.status.color)
                 }
-                textBlock(title: "Last summary", text: session.lastSummary ?? "No summary yet.")
-                lastMessage
+                if let summary = session.lastSummary {
+                    textBlock(title: "Last summary", text: summary)
+                }
+                if session.lastMessage != nil {
+                    lastMessage
+                }
                 PrefsEditor(model: model, session: session)
             }
             .padding(20)
@@ -42,10 +46,10 @@ struct SessionDetailView: View {
     private var metadata: some View {
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
             row("Tool", session.tool.displayName, symbol: session.tool.symbol)
-            row("Model", session.model ?? "Unknown", symbol: "cpu")
-            row("Terminal", session.terminal ?? "Unknown", symbol: "macwindow")
+            if let model = session.model { row("Model", model, symbol: "cpu") }
+            if let terminal = session.terminal { row("Terminal", terminal, symbol: "macwindow") }
             row("In status", "\(Elapsed.short(since: session.statusSince)), since \(session.statusSince.formatted(date: .omitted, time: .shortened))", symbol: "clock")
-            row("Folder", session.cwd, symbol: "folder")
+            row("Folder", session.displayFolder, symbol: "folder")
             row("Session ID", session.id, symbol: "number")
         }
         .font(.callout)

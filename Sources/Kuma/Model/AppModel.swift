@@ -40,6 +40,7 @@ final class AppModel: ObservableObject {
     @Published var voiceInstalling = false
     @Published var toolBusy: Set<Tool> = []
     @Published var lastError: String?
+    @Published var focusSessionId: String?
     @Published var skipShortcut: HotKey = AppModel.loadSkipShortcut()
 
     var windowOpener: ((String) -> Void)?
@@ -55,17 +56,20 @@ final class AppModel: ObservableObject {
         settings.launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
+    var visibleSessions: [Session] { sessions.filter { !$0.isScratch } }
+
     var sortedSessions: [Session] {
-        sessions.sorted {
+        visibleSessions.sorted {
             if $0.status.urgency != $1.status.urgency { return $0.status.urgency > $1.status.urgency }
             return $0.statusSince < $1.statusSince
         }
     }
 
-    var needsYouCount: Int { sessions.filter { $0.status.needsYou }.count }
-    var workingCount: Int { sessions.filter { $0.status == .working }.count }
-    var doneCount: Int { sessions.filter { $0.status == .done }.count }
-    var needsAttention: Bool { sessions.contains { $0.status == .needsApproval || $0.status == .question } }
+    var needsYouCount: Int { visibleSessions.filter { $0.status.needsYou }.count }
+    var workingCount: Int { visibleSessions.filter { $0.status == .working }.count }
+    var doneCount: Int { visibleSessions.filter { $0.status == .done }.count }
+    var endedCount: Int { visibleSessions.filter { $0.status == .ended }.count }
+    var needsAttention: Bool { visibleSessions.contains { $0.status == .needsApproval || $0.status == .question } }
 
     var activePersona: Persona? { personas.first { $0.id == settings.personaId } }
 
@@ -92,7 +96,8 @@ final class AppModel: ObservableObject {
     func updatePrefs(session: Session, prefs: SessionPrefs, scope: PrefsScope) {
         switch scope {
         case .session:
-            settings.sessionPrefs[session.id] = prefs
+            let fallback = settings.projectPrefs[session.project] ?? settings.defaultPrefs
+            settings.sessionPrefs[session.id] = prefs == fallback ? nil : prefs
         case .project:
             settings.projectPrefs[session.project] = prefs
             for other in sessions where other.project == session.project {
@@ -244,6 +249,18 @@ final class AppModel: ObservableObject {
         windowOpener?(KumaWindowID.dashboard)
     }
 
+    func openDashboard(focus session: Session) {
+        focusSessionId = session.id
+        openDashboard()
+    }
+
+    func setSpeakLevel(_ session: Session, muted: Bool, highOnly: Bool) {
+        var prefs = prefs(for: session)
+        prefs.muted = muted
+        prefs.highOnly = highOnly
+        updatePrefs(session: session, prefs: prefs, scope: prefsSource(for: session) == .project ? .project : .session)
+    }
+
     func openSettings() {
         NSApp.activate(ignoringOtherApps: true)
         settingsOpener?()
@@ -268,7 +285,19 @@ final class AppModel: ObservableObject {
             self.engine = engine
             engine.attach(self)
             refreshPersonas()
+            dropRedundantSessionPrefs()
         }
+    }
+
+    private func dropRedundantSessionPrefs() {
+        let projects = Dictionary(sessions.map { ($0.id, $0.project) }, uniquingKeysWith: { first, _ in first })
+        let redundant = settings.sessionPrefs.filter { id, prefs in
+            guard let project = projects[id] else { return settings.projectPrefs.isEmpty && prefs == settings.defaultPrefs }
+            return prefs == (settings.projectPrefs[project] ?? settings.defaultPrefs)
+        }
+        guard !redundant.isEmpty else { return }
+        for id in redundant.keys { settings.sessionPrefs[id] = nil }
+        persistSettings()
     }
 
     private func persistSettings() {

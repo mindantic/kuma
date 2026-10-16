@@ -20,10 +20,14 @@ struct MenuBarLabel: View {
 
 struct MenuBarView: View {
     @ObservedObject var model: AppModel
+    @State private var expanded: Session.ID?
 
     var body: some View {
         VStack(spacing: 0) {
             header
+            if let current = model.current {
+                NowSpeaking(model: model, briefing: current)
+            }
             Divider()
             sessionList
             Divider()
@@ -31,39 +35,48 @@ struct MenuBarView: View {
         }
         .frame(width: 400)
         .tint(KumaTheme.purple)
+        .animation(.easeOut(duration: 0.18), value: expanded)
+        .animation(.easeOut(duration: 0.18), value: model.current?.id)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                KumaLogo(size: 22)
+        HStack(spacing: 10) {
+            KumaLogo(size: 30)
+            VStack(alignment: .leading, spacing: 1) {
                 Text("Kuma")
-                    .font(.headline)
-                Spacer()
-                Picker("Mode", selection: Binding(get: { model.settings.mode }, set: { model.setMode($0) })) {
-                    ForEach(Mode.allCases, id: \.self) { mode in
-                        Text(mode.shortLabel).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 150)
-                .help(model.settings.mode.label)
+                    .font(.system(size: 14, weight: .semibold))
+                statusLine
             }
-            HStack(spacing: 14) {
-                CountChip(count: model.needsYouCount, label: "need you", color: .orange)
-                CountChip(count: model.workingCount, label: "working", color: .blue)
-                CountChip(count: model.doneCount, label: "done", color: .green)
-                Spacer()
-                if model.current != nil {
-                    Label("Speaking", systemImage: "waveform")
-                        .font(.caption)
-                        .foregroundStyle(KumaTheme.purple)
+            Spacer()
+            ModeMenu(model: model)
+                .menuStyle(.borderlessButton)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.primary.opacity(0.08)))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private var statusLine: some View {
+        let parts: [(Int, String, Color)] = [
+            (model.needsYouCount, "need you", .orange),
+            (model.workingCount, "working", .blue),
+            (model.doneCount, "done", .green),
+        ].filter { $0.0 > 0 }
+        return HStack(spacing: 10) {
+            if parts.isEmpty {
+                Text("No active sessions").foregroundStyle(.secondary)
+            }
+            ForEach(parts, id: \.1) { count, label, color in
+                HStack(spacing: 4) {
+                    Circle().fill(color).frame(width: 6, height: 6)
+                    Text("\(count) \(label)")
+                        .foregroundStyle(label == "need you" ? Color.orange : Color.secondary)
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .font(.system(size: 11.5).monospacedDigit())
     }
 
     private var sessionList: some View {
@@ -72,19 +85,27 @@ struct MenuBarView: View {
                 ForEach(groups, id: \.title) { group in
                     Section {
                         ForEach(group.sessions) { session in
-                            MenuSessionRow(model: model, session: session)
+                            MenuSessionRow(model: model, session: session, expanded: expanded == session.id) {
+                                expanded = expanded == session.id ? nil : session.id
+                            }
                         }
                     } header: {
                         SectionHeader(title: group.title, count: group.sessions.count)
                     }
                 }
-                if model.sessions.isEmpty {
-                    Text("No sessions yet. Start Claude Code, OpenCode, Codex or Cursor and they appear here.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding(20)
+                if model.visibleSessions.isEmpty {
+                    VStack(spacing: 8) {
+                        KumaLogo(size: 40).opacity(0.8)
+                        Text("No sessions yet. Start Claude Code, OpenCode, Codex or Cursor and they show up here.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
                 }
             }
+            .padding(.bottom, 4)
         }
         .frame(maxHeight: 460)
         .fixedSize(horizontal: false, vertical: true)
@@ -116,17 +137,38 @@ struct MenuBarView: View {
     }
 }
 
-private struct CountChip: View {
-    let count: Int
-    let label: String
-    let color: Color
+private struct NowSpeaking: View {
+    @ObservedObject var model: AppModel
+    let briefing: Briefing
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text("\(count)").font(.callout.monospacedDigit().weight(.semibold))
-            Text(label).font(.callout).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "waveform")
+                .symbolEffect(.variableColor.iterative, options: .repeating)
+                .foregroundStyle(KumaTheme.purple)
+                .frame(width: 16)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(briefing.project).font(.system(size: 12, weight: .semibold))
+                    if model.pendingCount > 0 {
+                        Text("\(model.pendingCount) queued").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+                Text(briefing.text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 6)
+            Button("Skip") { model.skipCurrent() }
+                .controlSize(.small)
+                .help("Skip (\(model.skipShortcut.label))")
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(KumaTheme.purple.opacity(0.1))
+        .transition(.opacity)
     }
 }
 
@@ -135,17 +177,17 @@ private struct SectionHeader: View {
     let count: Int
 
     var body: some View {
-        HStack {
+        HStack(spacing: 6) {
             Text(title.uppercased())
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text("\(count)")
-                .font(.caption2.monospacedDigit())
+                .font(.system(size: 10).monospacedDigit())
                 .foregroundStyle(.tertiary)
             Spacer()
         }
         .padding(.horizontal, 14)
-        .padding(.top, 8)
+        .padding(.top, 9)
         .padding(.bottom, 4)
         .background(.bar)
     }
@@ -164,72 +206,138 @@ private struct FooterButton: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color.primary.opacity(0.08) : .clear))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
     }
 }
 
+private enum RowSpeak: Hashable {
+    case everything, important, muted
+}
+
 struct MenuSessionRow: View {
     @ObservedObject var model: AppModel
     let session: Session
+    let expanded: Bool
+    let onToggle: () -> Void
     @State private var hovering = false
 
     var body: some View {
         let prefs = model.prefs(for: session)
-        HStack(alignment: .top, spacing: 9) {
-            StatusDot(status: session.status)
-                .padding(.top, 5)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(session.project)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    Text(session.title ?? "")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer(minLength: 4)
-                    TimelineView(.periodic(from: .now, by: 30)) { context in
-                        Text(Elapsed.short(since: session.statusSince, now: context.date))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(session.status.needsYou ? session.status.color : .secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 9) {
+                StatusDot(status: session.status)
+                    .padding(.top, 5)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(session.project)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                            .layoutPriority(1)
+                        if let title = session.title, title != session.project {
+                            Text(title)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        Spacer(minLength: 4)
+                        if prefs.muted || prefs.highOnly || hovering {
+                            Button {
+                                model.muteToggle(session)
+                            } label: {
+                                Image(systemName: prefs.muted ? "speaker.slash.fill" : (prefs.highOnly ? "speaker.badge.exclamationmark.fill" : "speaker.wave.2.fill"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(prefs.muted ? Color.secondary : KumaTheme.purple)
+                                    .frame(width: 18, height: 16)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help(prefs.muted ? "Unmute this session" : "Mute this session")
+                        }
+                        TimelineView(.periodic(from: .now, by: 30)) { context in
+                            Text(Elapsed.short(since: session.statusSince, now: context.date))
+                                .font(.system(size: 11).monospacedDigit())
+                                .foregroundStyle(session.status.needsYou ? session.status.color : .secondary)
+                        }
                     }
+                    HStack(spacing: 4) {
+                        Image(systemName: session.tool.symbol)
+                        Text(metaLine).lineLimit(1)
+                    }
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
                 }
-                if let summary = session.lastSummary {
-                    Text(summary)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.primary.opacity(0.85))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                HStack(spacing: 5) {
-                    Image(systemName: session.tool.symbol)
-                    Text(metaLine)
-                        .lineLimit(1)
-                }
-                .font(.system(size: 10.5))
-                .foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .padding(.top, 4)
+                    .opacity(hovering || expanded ? 1 : 0)
             }
-            Button {
-                model.muteToggle(session)
-            } label: {
-                Image(systemName: prefs.muted ? "speaker.slash.fill" : (prefs.highOnly ? "speaker.badge.exclamationmark" : "speaker.wave.2"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(prefs.muted ? Color.secondary : KumaTheme.purple)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onToggle)
+
+            if expanded {
+                details(prefs)
+                    .padding(.leading, 17)
+                    .padding(.top, 8)
+                    .transition(.opacity)
             }
-            .buttonStyle(.plain)
-            .help(prefs.muted ? "Unmute this session" : "Mute this session")
-            .padding(.top, 1)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .background(hovering ? Color.primary.opacity(0.05) : .clear)
-        .opacity(session.status == .ended ? 0.6 : 1)
+        .padding(.vertical, 7)
+        .background(expanded ? Color.primary.opacity(0.06) : (hovering ? Color.primary.opacity(0.04) : .clear))
+        .opacity(session.status == .ended && !expanded ? 0.6 : 1)
         .onHover { hovering = $0 }
+    }
+
+    private func details(_ prefs: SessionPrefs) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let pending = session.pendingDetail {
+                Text(pending)
+                    .font(.system(size: 11, design: .monospaced))
+                    .lineLimit(3)
+                    .padding(7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(session.status.color.opacity(0.12)))
+            }
+            Text(summaryText)
+                .font(.system(size: 12))
+                .foregroundStyle(session.lastSummary == nil && session.lastMessage == nil ? .secondary : .primary)
+                .lineLimit(6)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            HStack(spacing: 8) {
+                Picker("Speak", selection: Binding(
+                    get: { prefs.muted ? RowSpeak.muted : prefs.highOnly ? .important : .everything },
+                    set: { model.setSpeakLevel(session, muted: $0 == .muted, highOnly: $0 == .important) }
+                )) {
+                    Text("Everything").tag(RowSpeak.everything)
+                    Text("Important").tag(RowSpeak.important)
+                    Text("Muted").tag(RowSpeak.muted)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                Spacer()
+                Button {
+                    model.openDashboard(focus: session)
+                } label: {
+                    Label("Details", systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var summaryText: String {
+        if let summary = session.lastSummary { return summary }
+        if let message = session.lastMessage { return message }
+        return "No summary yet."
     }
 
     private var metaLine: String {
