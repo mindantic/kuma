@@ -113,7 +113,7 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack(spacing: 4) {
-            FooterButton(title: "Open Dashboard", symbol: "rectangle.grid.1x2") { model.openDashboard() }
+            FooterButton(title: "Dashboard", symbol: "rectangle.grid.1x2") { model.openDashboard() }
             FooterButton(title: "Settings", symbol: "gearshape") { model.openSettings() }
             Spacer()
             FooterButton(title: "Quit", symbol: "power") { model.quit() }
