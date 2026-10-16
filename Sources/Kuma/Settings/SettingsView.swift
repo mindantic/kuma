@@ -48,6 +48,24 @@ private struct GeneralSettings: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            Section("Toast") {
+                Toggle("Show a toast while Kuma speaks", isOn: Binding(get: { model.toastEnabled }, set: { model.setToastEnabled($0) }))
+                Picker("Style", selection: Binding(get: { model.toastStyle }, set: { model.setToastStyle($0) })) {
+                    Text("Full, icon, session and briefing").tag(ToastStyle.full)
+                    Text("Compact, icon and session name").tag(ToastStyle.compact)
+                }
+                .pickerStyle(.radioGroup)
+                .disabled(!model.toastEnabled)
+                HStack {
+                    Spacer()
+                    Button {
+                        model.testVoice()
+                    } label: {
+                        Label("Preview", systemImage: "play.fill")
+                    }
+                    .disabled(!model.toastEnabled)
+                }
+            }
             Section {
                 Toggle("Launch at login", isOn: Binding(get: { model.settings.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                 if let error = model.lastError {
@@ -56,7 +74,7 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 230)
+        .frame(height: 330)
     }
 
     private var modeExplanation: String {

@@ -38,18 +38,20 @@ final class PawBubbleController {
     init(model: AppModel) {
         self.model = model
         model.$current
-            .combineLatest(model.$pendingCount)
+            .combineLatest(model.$pendingCount, model.$toastEnabled, model.$toastStyle)
             .receive(on: RunLoop.main)
-            .sink { [weak self] current, pending in self?.render(current, pending: pending) }
+            .sink { [weak self] current, pending, enabled, style in
+                self?.render(enabled ? current : nil, pending: pending, style: style)
+            }
             .store(in: &cancellables)
     }
 
-    private func render(_ briefing: Briefing?, pending: Int) {
+    private func render(_ briefing: Briefing?, pending: Int, style: ToastStyle) {
         guard let briefing else {
             hide()
             return
         }
-        let view = PawBubbleView(briefing: briefing, pendingCount: pending, shortcut: model.skipShortcut.label, onSkip: { [weak model] in model?.skipCurrent() }, onClear: { [weak model] in model?.clearAll() })
+        let view = PawBubbleView(briefing: briefing, pendingCount: pending, style: style, shortcut: model.skipShortcut.label, onSkip: { [weak model] in model?.skipCurrent() }, onClear: { [weak model] in model?.clearAll() })
         if let hosting {
             hosting.rootView = view
         } else {
@@ -99,14 +101,69 @@ final class PawBubbleController {
 struct PawBubbleView: View {
     let briefing: Briefing
     let pendingCount: Int
+    let style: ToastStyle
     let shortcut: String
     let onSkip: () -> Void
     let onClear: () -> Void
     @State private var hoveringClear = false
 
     var body: some View {
-        content(briefing)
-            .padding(14)
+        Group {
+            switch style {
+            case .full: content(briefing)
+            case .compact: compact(briefing)
+            }
+        }
+        .padding(14)
+    }
+
+    private func compact(_ briefing: Briefing) -> some View {
+        HStack(spacing: 8) {
+            KumaLogo(size: 24)
+            Text(briefing.project)
+                .font(.system(size: 12.5, weight: .semibold))
+                .lineLimit(1)
+            if briefing.priority == .high {
+                Circle().fill(Color.orange).frame(width: 6, height: 6)
+            }
+            if pendingCount > 0 {
+                Text("+\(pendingCount)")
+                    .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(KumaTheme.purple.opacity(0.18)))
+                    .foregroundStyle(KumaTheme.purple)
+            }
+            clearButton
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 7)
+        .padding(.vertical, 6)
+        .fixedSize()
+        .background(
+            Capsule(style: .continuous)
+                .fill(.thickMaterial)
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+        )
+        .overlay(Capsule(style: .continuous).strokeBorder(KumaTheme.purple.opacity(0.35), lineWidth: 1))
+        .contentShape(Capsule())
+        .onTapGesture { onSkip() }
+        .help("\(briefing.text)\n\nClick to skip, \(shortcut) also skips")
+    }
+
+    private var clearButton: some View {
+        Button {
+            onClear()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16, height: 16)
+                .background(Circle().fill(Color.primary.opacity(hoveringClear ? 0.15 : 0.07)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveringClear = $0 }
+        .help("Clear all briefings")
     }
 
     private func content(_ briefing: Briefing) -> some View {
@@ -158,19 +215,7 @@ struct PawBubbleView: View {
                 .strokeBorder(KumaTheme.purple.opacity(0.35), lineWidth: 1)
         )
         .overlay(alignment: .topTrailing) {
-            Button {
-                onClear()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-                    .background(Circle().fill(Color.primary.opacity(hoveringClear ? 0.15 : 0.07)))
-            }
-            .buttonStyle(.plain)
-            .onHover { hoveringClear = $0 }
-            .help("Clear all briefings")
-            .padding(10)
+            clearButton.padding(10)
         }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .onTapGesture { onSkip() }

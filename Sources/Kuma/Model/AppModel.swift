@@ -9,6 +9,12 @@ struct VoiceOption: Identifiable, Hashable {
     let name: String
 }
 
+enum ToastStyle: String, CaseIterable, Identifiable {
+    case full, compact
+    var id: String { rawValue }
+    var label: String { self == .full ? "Full" : "Compact" }
+}
+
 struct ToolStatus: Equatable {
     var binaryFound: Bool
     var hookInstalled: Bool
@@ -41,6 +47,8 @@ final class AppModel: ObservableObject {
     @Published var toolBusy: Set<Tool> = []
     @Published var lastError: String?
     @Published var focusSessionId: String?
+    @Published var toastEnabled = UserDefaults.standard.object(forKey: "toastEnabled") as? Bool ?? true
+    @Published var toastStyle = ToastStyle(rawValue: UserDefaults.standard.string(forKey: "toastStyle") ?? "") ?? .full
     @Published var skipShortcut: HotKey = AppModel.loadSkipShortcut()
 
     var windowOpener: ((String) -> Void)?
@@ -211,6 +219,16 @@ final class AppModel: ObservableObject {
         } catch {
             lastError = "\(tool.displayName): \(error.localizedDescription)"
         }
+    }
+
+    func setToastEnabled(_ enabled: Bool) {
+        toastEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "toastEnabled")
+    }
+
+    func setToastStyle(_ style: ToastStyle) {
+        toastStyle = style
+        UserDefaults.standard.set(style.rawValue, forKey: "toastStyle")
     }
 
     func setSkipShortcut(_ key: HotKey) {
