@@ -45,17 +45,15 @@ printf 'APPL????' > "$CONTENTS/PkgInfo"
 echo "==> app icon"
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"
-ICON_SRC="$ROOT/Assets/app-icon.png"
-if command -v magick >/dev/null; then
-  magick "$ROOT/Assets/app-icon.png" -resize 824x824 -background none -gravity center -extent 1024x1024 "$ICONSET/master.png"
-  ICON_SRC="$ICONSET/master.png"
+if command -v rsvg-convert >/dev/null; then
+  swift "$ROOT/scripts/render-icon.swift" "$ROOT/Assets/app-icon.svg" "$ICONSET"
+else
+  for size in 16 32 128 256 512; do
+    sips -z "$size" "$size" "$ROOT/Assets/app-icon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    double=$((size * 2))
+    sips -z "$double" "$double" "$ROOT/Assets/app-icon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+  done
 fi
-for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-  double=$((size * 2))
-  sips -z "$double" "$double" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
-done
-rm -f "$ICONSET/master.png"
 iconutil -c icns "$ICONSET" -o "$RES/AppIcon.icns"
 rm -rf "$(dirname "$ICONSET")"
 
