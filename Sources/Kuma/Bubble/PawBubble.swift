@@ -5,7 +5,7 @@ import SwiftUI
 
 final class PawPanel: NSPanel {
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 460, height: 90), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 500, height: 110), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
@@ -97,6 +97,11 @@ final class PawBubbleController {
 }
 
 struct PawBubbleView: View {
+    static let appIcon: NSImage = {
+        if let url = Bundle.main.url(forResource: "app-icon", withExtension: "png"), let image = NSImage(contentsOf: url) { return image }
+        return NSApp.applicationIconImage
+    }()
+
     let briefing: Briefing
     let pendingCount: Int
     let onSkip: () -> Void
@@ -110,21 +115,19 @@ struct PawBubbleView: View {
     }
 
     private func content(_ briefing: Briefing) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
             ZStack {
-                Circle()
-                    .fill(KumaTheme.deepPurple)
-                    .frame(width: 40, height: 40)
-                Circle()
-                    .stroke(Color.white.opacity(0.35), lineWidth: 2)
-                    .frame(width: 40, height: 40)
-                    .scaleEffect(pulse ? 1.25 : 1)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(KumaTheme.purple.opacity(0.5), lineWidth: 2)
+                    .frame(width: 44, height: 44)
+                    .scaleEffect(pulse ? 1.22 : 1)
                     .opacity(pulse ? 0 : 1)
-                Image(systemName: "pawprint.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
+                Image(nsImage: PawBubbleView.appIcon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 44, height: 44)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(briefing.project)
                         .font(.system(size: 12, weight: .semibold))
@@ -145,20 +148,21 @@ struct PawBubbleView: View {
                 }
                 Text(briefing.text)
                     .font(.system(size: 13))
-                    .lineLimit(3)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 360, alignment: .leading)
+                    .frame(maxWidth: 380, alignment: .leading)
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 28)
-        .padding(.vertical, 10)
-        .frame(minWidth: 300, maxWidth: 460, alignment: .leading)
+        .padding(.leading, 16)
+        .padding(.trailing, 36)
+        .padding(.vertical, 16)
+        .frame(minWidth: 320, maxWidth: 500, alignment: .leading)
         .fixedSize()
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.regularMaterial)
+                .fill(.thickMaterial)
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
         )
         .overlay(
@@ -178,7 +182,7 @@ struct PawBubbleView: View {
             .buttonStyle(.plain)
             .onHover { hoveringClear = $0 }
             .help("Clear all briefings")
-            .padding(7)
+            .padding(10)
         }
         .contentShape(RoundedRectangle(cornerRadius: 18))
         .onTapGesture { onSkip() }
