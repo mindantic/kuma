@@ -1,0 +1,96 @@
+import AppKit
+import SwiftUI
+import KumaCore
+
+enum KumaTheme {
+    static let nsPurple = NSColor(name: "KumaPurple") { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return dark
+            ? NSColor(srgbRed: 0.72, green: 0.52, blue: 0.86, alpha: 1)
+            : NSColor(srgbRed: 0.42, green: 0.18, blue: 0.56, alpha: 1)
+    }
+    static let purple = Color(nsColor: nsPurple)
+    static let deepPurple = Color(.sRGB, red: 0.38, green: 0.19, blue: 0.44, opacity: 1)
+}
+
+extension SessionStatus {
+    var color: Color {
+        switch self {
+        case .needsApproval: return .orange
+        case .question: return Color(nsColor: .systemOrange).opacity(0.85)
+        case .error: return .red
+        case .done: return .green
+        case .working: return .blue
+        case .ended: return .gray
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .needsApproval: return "hand.raised.fill"
+        case .question: return "questionmark.bubble.fill"
+        case .error: return "exclamationmark.triangle.fill"
+        case .done: return "checkmark.circle.fill"
+        case .working: return "circle.dotted"
+        case .ended: return "moon.zzz.fill"
+        }
+    }
+
+    var needsYou: Bool { self == .needsApproval || self == .question || self == .error }
+}
+
+extension Tool {
+    var symbol: String {
+        switch self {
+        case .claude: return "sparkle"
+        case .opencode: return "chevron.left.forwardslash.chevron.right"
+        case .codex: return "terminal"
+        case .cursor: return "cursorarrow.rays"
+        case .other: return "questionmark.square"
+        }
+    }
+
+    static var watchable: [Tool] { allCases.filter { $0 != .other } }
+}
+
+extension Mode {
+    var shortLabel: String {
+        switch self {
+        case .enabled: return "On"
+        case .dnd: return "DND"
+        case .disabled: return "Off"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .enabled: return "speaker.wave.2.fill"
+        case .dnd: return "moon.fill"
+        case .disabled: return "speaker.slash.fill"
+        }
+    }
+}
+
+enum Elapsed {
+    static func short(since date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(date)))
+        if seconds < 45 { return "now" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(max(1, minutes))m" }
+        let hours = minutes / 60
+        if hours < 24 { return minutes % 60 == 0 ? "\(hours)h" : "\(hours)h \(minutes % 60)m" }
+        return "\(hours / 24)d"
+    }
+}
+
+struct StatusDot: View {
+    let status: SessionStatus
+    var size: CGFloat = 8
+
+    var body: some View {
+        Circle()
+            .fill(status.color)
+            .frame(width: size, height: size)
+            .overlay(Circle().strokeBorder(.black.opacity(0.12), lineWidth: 0.5))
+    }
+}
