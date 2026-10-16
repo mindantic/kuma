@@ -11,12 +11,15 @@ public enum SummaryPrompt {
             : "Say at most two short sentences, 35 words in total."
         let base = BriefingPolicy.basePriority(for: e.kind) ?? .normal
         var lines: [String] = [
-            "You are Kuma, a voice assistant that briefs a busy developer about an AI coding session. Your words will be spoken aloud.",
-            "Persona: \(request.persona.tone)",
+            "You are a voice assistant that briefs a busy developer about an AI coding session. Your words will be spoken aloud.",
+            "Speak as \(request.persona.name). Character: \(request.persona.tone)",
             "Rules:",
-            "Speak like a calm assistant briefing a busy developer.",
+            "The character changes only the wording, never the facts.",
             length,
-            "Start with the outcome.",
+            "Lead with the most important point.",
+            "Never say or imply the work is done, finished, complete or ready. An agent stopping its turn does not mean the task is complete.",
+            "Never use the words done, finished, complete or completed.",
+            "Say what the agent reported, such as what it changed, found, asked or is waiting for.",
             "If the developer must do something, say what.",
             "No markdown, no code, no file paths, no URLs, no lists.",
             "Do not invent anything that is not in the report.",
@@ -43,8 +46,8 @@ public enum SummaryPrompt {
         switch kind {
         case .permission: return "needs permission"
         case .question: return "asked the developer a question"
-        case .stop: return "finished its turn"
-        case .subagentStop: return "a subagent finished"
+        case .stop: return "stopped and is waiting for the developer"
+        case .subagentStop: return "a subagent stopped"
         case .error: return "hit an error"
         case .sessionStart: return "session started"
         case .sessionEnd: return "session ended"
@@ -85,13 +88,39 @@ public enum SummaryParser {
         if let block = firstJSONObject(in: text),
            let obj = JSONValue.parse(Data(block.utf8)),
            let say = obj["say"]?.string.map(clean), !say.isEmpty {
-            let needs = obj["needs"]?.string.map(clean).flatMap { $0.isEmpty || $0.lowercased() == "null" ? nil : $0 }
+            let needs = obj["needs"]?.string.map(clean).map(withoutCompletionClaims).flatMap { $0.isEmpty || $0.lowercased() == "null" ? nil : $0 }
             let priority = obj["priority"]?.string.flatMap { Priority(label: $0) } ?? base
-            return SummaryResult(say: say, needs: needs, priority: priority)
+            let spoken = withoutCompletionClaims(say)
+            guard !spoken.isEmpty else { return nil }
+            return SummaryResult(say: spoken, needs: needs, priority: priority)
         }
-        let plain = clean(text)
+        let plain = withoutCompletionClaims(clean(text))
         guard !plain.isEmpty, !plain.hasPrefix("{") else { return nil }
         return SummaryResult(say: firstSentences(plain, 2), needs: nil, priority: base)
+    }
+
+    private static let completionRewrites: [(String, String)] = [
+        (#"\b(?:is|are|was|were|has been|have been|got|gets|is now|are now|'s)\s+(?:all\s+|now\s+|fully\s+)?(?:done|finished|complete|completed)\b"#, "stopped"),
+        (#"\b(?:has|have|had)\s+(?:finished|completed)(?=\s+[A-Za-z])"#, "worked on"),
+        (#"\b(?:has|have|had)\s+(?:finished|completed)\b"#, "stopped"),
+        (#"\b(?:finished|completed)(?=\s+(?:the|a|an|its|his|her|their|all|every|work|up)\b)"#, "worked on"),
+        (#"\b(?:finished|complete|completed)(?=\s*(?:[.!?,;]|$))"#, "stopped"),
+        (#"\b(?:all\s+)?done\b"#, ""),
+    ]
+
+    public static func withoutCompletionClaims(_ text: String) -> String {
+        var t = text
+        for (pattern, replacement) in completionRewrites {
+            t = t.replacingOccurrences(of: pattern, with: replacement, options: [.regularExpression, .caseInsensitive])
+        }
+        for (pattern, replacement) in [(#"\s+([,.!?;:])"#, "$1"), (#"([,;:])\s*([.!?])"#, "$2"), (#",\s*,"#, ","), (#"\s{2,}"#, " "), (#"^[\s,.;:!?]+"#, "")] {
+            t = t.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
+        }
+        t = t.trimmingCharacters(in: .whitespaces)
+        guard let first = t.first else { return "" }
+        if t.count <= 1, !first.isLetter { return "" }
+        let original = text.trimmingCharacters(in: .whitespaces)
+        return original.hasPrefix(String(first)) ? t : first.uppercased() + t.dropFirst()
     }
 
     public static func firstJSONObject(in text: String) -> String? {

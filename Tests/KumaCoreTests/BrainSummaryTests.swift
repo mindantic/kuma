@@ -39,8 +39,8 @@ final class BrainSummaryTests: XCTestCase {
     }
 
     func testParseStrictJSON() {
-        let r = SummaryParser.parse(#"{"say":"bion is done. Tests pass.","needs":null,"priority":"normal"}"#, base: .normal)
-        XCTAssertEqual(r, SummaryResult(say: "bion is done. Tests pass.", needs: nil, priority: .normal))
+        let r = SummaryParser.parse(#"{"say":"bion fixed the login bug. Tests pass.","needs":null,"priority":"normal"}"#, base: .normal)
+        XCTAssertEqual(r, SummaryResult(say: "bion fixed the login bug. Tests pass.", needs: nil, priority: .normal))
     }
 
     func testParseWrappedJSON() {
@@ -58,8 +58,8 @@ final class BrainSummaryTests: XCTestCase {
     }
 
     func testParsePlainTextFallback() {
-        let r = SummaryParser.parse("**bion** finished the refactor. All tests pass. It also updated docs. More text.", base: .normal)
-        XCTAssertEqual(r?.say, "bion finished the refactor. All tests pass.")
+        let r = SummaryParser.parse("**bion** cleaned up the refactor. All tests pass. It also updated docs. More text.", base: .normal)
+        XCTAssertEqual(r?.say, "bion cleaned up the refactor. All tests pass.")
         XCTAssertEqual(r?.priority, .normal)
         XCTAssertNil(SummaryParser.parse("   ", base: .normal))
         XCTAssertNil(SummaryParser.parse("{broken json", base: .normal))
@@ -71,7 +71,7 @@ final class BrainSummaryTests: XCTestCase {
         XCTAssertEqual(t.result(for: request(.permission, detail: "Bash: rm -rf build")).say, "bion needs approval to run Bash.")
         XCTAssertEqual(t.result(for: request(.permission)).say, "bion needs your approval.")
         XCTAssertEqual(t.result(for: request(.question)).say, "bion is asking you a question.")
-        XCTAssertEqual(t.result(for: request(.stop)).say, "bion is done.")
+        XCTAssertEqual(t.result(for: request(.stop)).say, "bion stopped and is waiting for you.")
         XCTAssertEqual(t.result(for: request(.error)).say, "bion hit an error.")
         XCTAssertEqual(t.result(for: request(.error)).priority, .high)
         XCTAssertEqual(t.result(for: request(.stop)).priority, .normal)
@@ -114,7 +114,7 @@ final class BrainSummaryTests: XCTestCase {
         let log = CallLog()
         let s = CLISummarizer(locator: ToolLocator(home: home, shell: nil), runners: [FakeRunner(tool: .claude, reply: nil, calls: log)])
         let r = await s.summarize(request(.stop, message: "Done."))
-        XCTAssertEqual(r.say, "bion is done.")
+        XCTAssertEqual(r.say, "bion stopped and is waiting for you.")
         XCTAssertNil(r.summarizedBy)
         XCTAssertEqual(log.all.count, 1)
     }
@@ -157,5 +157,30 @@ final class BrainSummaryTests: XCTestCase {
         let echo = await ProcessRunner.run(executable: "/bin/echo", arguments: ["hello"], timeout: 5)
         XCTAssertEqual(echo.stdout, "hello\n")
         XCTAssertTrue(echo.succeeded)
+    }
+
+    func testSummaryNeverClaimsCompletion() {
+        let cases: [(String, String)] = [
+            ("bion is done.", "bion stopped."),
+            ("Done. Updated four pages, build passes.", "Updated four pages, build passes."),
+            ("The refactor is all done and tests pass.", "The refactor stopped and tests pass."),
+            ("bion has finished the migration.", "bion worked on the migration."),
+            ("Finished the guide rewrite.", "Worked on the guide rewrite."),
+            ("Migration complete, two warnings left.", "Migration stopped, two warnings left."),
+            ("bion fixed the login bug.", "bion fixed the login bug."),
+        ]
+        for (input, expected) in cases {
+            XCTAssertEqual(SummaryParser.withoutCompletionClaims(input), expected, input)
+        }
+        let parsed = SummaryParser.parse(#"{"say":"bion is done.","needs":null,"priority":"normal"}"#, base: .normal)
+        XCTAssertEqual(parsed?.say, "bion stopped.")
+        XCTAssertNil(SummaryParser.parse(#"{"say":"Done.","needs":null,"priority":"normal"}"#, base: .normal))
+    }
+
+    func testPromptForbidsCompletionClaims() {
+        let prompt = SummaryPrompt.build(request(.stop, message: "Done."))
+        XCTAssertTrue(prompt.contains("Never use the words done, finished, complete or completed."))
+        XCTAssertTrue(prompt.contains("stopped and is waiting for the developer"))
+        XCTAssertFalse(prompt.contains("finished its turn"))
     }
 }

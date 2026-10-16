@@ -64,11 +64,19 @@ public enum ProcessRunner {
         let err = Buffer()
         outPipe.fileHandleForReading.readabilityHandler = { h in
             let d = h.availableData
-            if !d.isEmpty { out.append(d) }
+            if d.isEmpty {
+                h.readabilityHandler = nil
+            } else {
+                out.append(d)
+            }
         }
         errPipe.fileHandleForReading.readabilityHandler = { h in
             let d = h.availableData
-            if !d.isEmpty { err.append(d) }
+            if d.isEmpty {
+                h.readabilityHandler = nil
+            } else {
+                err.append(d)
+            }
         }
         let started = Date()
         let once = Once()

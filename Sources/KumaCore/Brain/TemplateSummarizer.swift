@@ -24,11 +24,11 @@ public struct TemplateSummarizer: Summarizing {
             say = "\(p) is asking you a question."
             needs = "answer the question"
         case .stop:
-            say = "\(p) is done."
+            say = "\(p) stopped and is waiting for you."
         case .error:
             say = "\(p) hit an error."
         case .subagentStop:
-            say = "A subagent in \(p) finished."
+            say = "A subagent in \(p) stopped."
         case .sessionStart:
             say = "\(p) started a session."
         case .sessionEnd:

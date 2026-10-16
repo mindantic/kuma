@@ -65,11 +65,12 @@ final class BrainPolicyTests: XCTestCase {
 
     func testPersonaLibrary() {
         XCTAssertEqual(PersonaLibrary.persona(id: nil, custom: []).id, "kuma")
-        XCTAssertEqual(PersonaLibrary.persona(id: "butler", custom: []).voice, "bm_george")
-        XCTAssertEqual(PersonaLibrary.kuma.speed, 0.95)
+        XCTAssertEqual(PersonaLibrary.persona(id: "butler", custom: []).id, "jarvis")
+        XCTAssertEqual(PersonaLibrary.persona(id: "luffy", custom: []).name, "Luffy")
+        XCTAssertEqual(PersonaLibrary.builtIns.count, 11)
         let custom = Persona(id: "pirate", name: "Pirate", voice: "am_adam", speed: 1.1, tone: "Arr.")
         let clash = Persona(id: "kuma", name: "Fake", voice: "x", speed: 1, tone: "x")
-        XCTAssertEqual(PersonaLibrary.all(custom: [custom, clash]).map(\.id), ["kuma", "butler", "neutral", "pirate"])
+        XCTAssertEqual(PersonaLibrary.all(custom: [custom, clash]).map(\.id), PersonaLibrary.builtIns.map(\.id) + ["pirate"])
         XCTAssertEqual(PersonaLibrary.persona(id: "pirate", custom: [custom]).voice, "am_adam")
         XCTAssertEqual(PersonaLibrary.persona(id: "missing", custom: []).id, "kuma")
     }
