@@ -2,23 +2,7 @@ import Foundation
 import KumaCore
 
 enum MockData {
-    static let kokoroVoices: [VoiceOption] = [
-        VoiceOption(id: "am_onyx", name: "Onyx, deep male"),
-        VoiceOption(id: "am_adam", name: "Adam, male"),
-        VoiceOption(id: "am_michael", name: "Michael, male"),
-        VoiceOption(id: "am_fenrir", name: "Fenrir, male"),
-        VoiceOption(id: "am_puck", name: "Puck, male"),
-        VoiceOption(id: "af_heart", name: "Heart, female"),
-        VoiceOption(id: "af_bella", name: "Bella, female"),
-        VoiceOption(id: "af_nicole", name: "Nicole, whisper"),
-        VoiceOption(id: "af_sarah", name: "Sarah, female"),
-        VoiceOption(id: "af_sky", name: "Sky, female"),
-        VoiceOption(id: "bm_george", name: "George, British male"),
-        VoiceOption(id: "bm_lewis", name: "Lewis, British male"),
-        VoiceOption(id: "bm_fable", name: "Fable, British male"),
-        VoiceOption(id: "bf_emma", name: "Emma, British female"),
-        VoiceOption(id: "bf_isabella", name: "Isabella, British female"),
-    ]
+    static let kokoroVoices: [VoiceOption] = KokoroVoices.catalog.map { VoiceOption(id: $0.id, name: $0.displayName) }
 
     static let builtInPersonas: [Persona] = PersonaLibrary.builtIns
 
