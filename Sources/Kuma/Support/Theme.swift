@@ -10,6 +10,7 @@ enum KumaTheme {
             : NSColor(srgbRed: 0.42, green: 0.18, blue: 0.56, alpha: 1)
     }
     static let purple = Color(nsColor: nsPurple)
+    static let surface = Color(nsColor: .windowBackgroundColor)
     static let deepPurple = Color(.sRGB, red: 0.38, green: 0.19, blue: 0.44, opacity: 1)
 
     static let logo: NSImage = {

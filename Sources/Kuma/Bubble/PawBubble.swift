@@ -142,7 +142,7 @@ struct PawBubbleView: View {
         .fixedSize()
         .background(
             Capsule(style: .continuous)
-                .fill(.thickMaterial)
+                .fill(KumaTheme.surface.opacity(0.97))
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
         )
         .overlay(Capsule(style: .continuous).strokeBorder(KumaTheme.purple.opacity(0.35), lineWidth: 1))
@@ -207,7 +207,7 @@ struct PawBubbleView: View {
         .fixedSize()
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.thickMaterial)
+                .fill(KumaTheme.surface.opacity(0.97))
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
         )
         .overlay(

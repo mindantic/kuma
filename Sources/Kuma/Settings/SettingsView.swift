@@ -4,7 +4,7 @@ import KumaCore
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable {
-    case general, voice, personality, tools, shortcuts
+    case general, personality, tools, shortcuts
 }
 
 struct SettingsView: View {
@@ -16,9 +16,6 @@ struct SettingsView: View {
             GeneralSettings(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(SettingsTab.general)
-            VoiceSettings(model: model)
-                .tabItem { Label("Voice", systemImage: "waveform") }
-                .tag(SettingsTab.voice)
             PersonalitySettings(model: model)
                 .tabItem { Label("Personality", systemImage: "theatermasks") }
                 .tag(SettingsTab.personality)
@@ -29,7 +26,7 @@ struct SettingsView: View {
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
                 .tag(SettingsTab.shortcuts)
         }
-        .frame(width: 560)
+        .frame(width: 620)
         .tint(KumaTheme.purple)
     }
 }
@@ -50,21 +47,22 @@ private struct GeneralSettings: View {
             }
             Section("Toast") {
                 Toggle("Show a toast while Kuma speaks", isOn: Binding(get: { model.toastEnabled }, set: { model.setToastEnabled($0) }))
-                Picker("Style", selection: Binding(get: { model.toastStyle }, set: { model.setToastStyle($0) })) {
-                    Text("Full, icon, session and briefing").tag(ToastStyle.full)
-                    Text("Compact, icon and session name").tag(ToastStyle.compact)
-                }
-                .pickerStyle(.radioGroup)
-                .disabled(!model.toastEnabled)
-                HStack {
-                    Spacer()
-                    Button {
-                        model.testVoice()
-                    } label: {
-                        Label("Preview", systemImage: "play.fill")
+                LabeledContent("Style") {
+                    HStack(spacing: 10) {
+                        Picker("Style", selection: Binding(get: { model.toastStyle }, set: { model.setToastStyle($0) })) {
+                            ForEach(ToastStyle.allCases) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        Button {
+                            model.testVoice()
+                        } label: {
+                            Label("Preview", systemImage: "play.fill")
+                        }
                     }
-                    .disabled(!model.toastEnabled)
                 }
+                .disabled(!model.toastEnabled)
             }
             Section {
                 Toggle("Launch at login", isOn: Binding(get: { model.settings.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
@@ -86,259 +84,50 @@ private struct GeneralSettings: View {
     }
 }
 
-private struct VoiceSettings: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        Form {
-            Section {
-                Picker("Voice", selection: Binding(get: { model.settings.voice }, set: { model.setVoice($0) })) {
-                    ForEach(model.voices) { Text($0.name).tag($0.id) }
-                }
-                LabeledContent("Speed") {
-                    HStack {
-                        Slider(value: Binding(get: { model.settings.speed }, set: { model.setSpeed($0) }), in: 0.6...1.6)
-                        Text(String(format: "%.2fx", model.settings.speed))
-                            .font(.callout.monospacedDigit())
-                            .frame(width: 44, alignment: .trailing)
-                    }
-                }
-                HStack {
-                    Spacer()
-                    Button {
-                        model.testVoice()
-                    } label: {
-                        Label("Test voice", systemImage: "play.fill")
-                    }
-                    .disabled(!model.voiceReady)
-                }
-            }
-            Section("Kokoro voice engine") {
-                HStack(spacing: 10) {
-                    Image(systemName: model.voiceReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(model.voiceReady ? .green : .orange)
-                        .font(.title3)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.voiceReady ? "Installed and ready" : "Not installed")
-                        Text("Runs on your Mac, nothing is sent to the cloud.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if model.voiceInstalling {
-                        ProgressView().controlSize(.small)
-                    } else if !model.voiceReady {
-                        Button("Install") { model.installVoice() }
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .frame(height: 320)
-    }
-}
-
-private struct PersonalitySettings: View {
-    @ObservedObject var model: AppModel
-    @State private var selection: String?
-    @State private var draft = Persona(id: "", name: "", voice: "am_onyx", speed: 1.0, tone: "")
-
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                List(selection: $selection) {
-                    Section("Presets") {
-                        ForEach(model.personas.filter(\.isBuiltIn)) { personaRow($0) }
-                    }
-                    Section("Custom") {
-                        ForEach(model.personas.filter { !$0.isBuiltIn }) { personaRow($0) }
-                    }
-                }
-                .listStyle(.sidebar)
-                Divider()
-                HStack(spacing: 2) {
-                    Button { newPersona() } label: { Image(systemName: "plus").frame(width: 22, height: 20) }
-                    Button {
-                        if let selection { model.deletePersona(selection) }
-                        selection = model.settings.personaId
-                    } label: { Image(systemName: "minus").frame(width: 22, height: 20) }
-                    .disabled(selectedPersona?.isBuiltIn ?? true)
-                    Spacer()
-                }
-                .buttonStyle(.borderless)
-                .padding(6)
-            }
-            .frame(width: 190)
-            Divider()
-            editor
-        }
-        .frame(height: 380)
-        .onAppear {
-            if selection == nil { selection = model.settings.personaId }
-            loadDraft()
-        }
-        .onChange(of: selection) { _, _ in loadDraft() }
-    }
-
-    private func personaRow(_ persona: Persona) -> some View {
-        HStack {
-            Text(persona.name)
-            Spacer()
-            if persona.id == model.settings.personaId {
-                Image(systemName: "checkmark").foregroundStyle(KumaTheme.purple)
-            }
-        }
-        .tag(persona.id)
-    }
-
-    private var selectedPersona: Persona? { model.personas.first { $0.id == selection } }
-
-    private var editor: some View {
-        Form {
-            TextField("Name", text: $draft.name)
-            Picker("Voice", selection: $draft.voice) {
-                ForEach(model.voices) { Text($0.name).tag($0.id) }
-            }
-            LabeledContent("Speed") {
-                HStack {
-                    Slider(value: $draft.speed, in: 0.6...1.6)
-                    Text(String(format: "%.2fx", draft.speed)).font(.callout.monospacedDigit()).frame(width: 44, alignment: .trailing)
-                }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Tone")
-                TextEditor(text: $draft.tone)
-                    .font(.callout)
-                    .frame(height: 80)
-                    .scrollContentBackground(.hidden)
-                    .padding(4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
-            }
-            HStack {
-                if draft.isBuiltIn {
-                    Text("Presets are read only. Saving creates a copy.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Use") { model.setPersona(draft.id) }
-                    .disabled(draft.id == model.settings.personaId || selectedPersona == nil)
-                Button(draft.isBuiltIn ? "Save as copy" : "Save") { save() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func loadDraft() {
-        if let persona = selectedPersona { draft = persona }
-    }
-
-    private func newPersona() {
-        let persona = Persona(id: "custom-\(UUID().uuidString.prefix(8).lowercased())", name: "New persona", voice: model.settings.voice, speed: 1.0, tone: "Describe how Kuma should talk.")
-        model.saveCustomPersona(persona)
-        selection = persona.id
-        draft = persona
-    }
-
-    private func save() {
-        var persona = draft
-        if persona.isBuiltIn {
-            persona.id = "custom-\(UUID().uuidString.prefix(8).lowercased())"
-            persona.name = "\(persona.name) copy"
-        }
-        model.saveCustomPersona(persona)
-        selection = persona.id
-    }
-}
-
-private struct ToolsSettings: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        Form {
-            ForEach(Tool.watchable, id: \.self) { tool in
-                ToolRow(model: model, tool: tool)
-            }
-            Section {
-                Text("Summaries for each session are written by the same tool the session runs. Leave the model empty to use the tool default.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(height: 530)
-    }
-}
-
-private struct ToolRow: View {
-    @ObservedObject var model: AppModel
-    let tool: Tool
-    @State private var summaryModel = ""
-
-    var body: some View {
-        let status = model.toolStatus[tool] ?? ToolStatus(binaryFound: false, hookInstalled: false)
-        Section {
-            HStack(spacing: 10) {
-                Image(systemName: tool.symbol)
-                    .frame(width: 22)
-                    .foregroundStyle(KumaTheme.purple)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(tool.displayName).font(.body.weight(.medium))
-                    HStack(spacing: 10) {
-                        badge(status.binaryFound ? "Binary found" : "Binary not found", ok: status.binaryFound)
-                        badge(status.hookInstalled ? "Hooks installed" : "Hooks not installed", ok: status.hookInstalled)
-                    }
-                }
-                Spacer()
-                if model.toolBusy.contains(tool) {
-                    ProgressView().controlSize(.small)
-                } else if status.hookInstalled {
-                    Button("Remove") { model.uninstallHooks(tool) }
-                } else {
-                    Button("Install") { model.installHooks(tool) }
-                        .disabled(!status.binaryFound)
-                }
-            }
-            TextField("Summary model", text: $summaryModel, prompt: Text("Tool default"))
-                .onSubmit { model.setSummaryModel(tool, model: summaryModel) }
-                .onChange(of: summaryModel) { _, value in model.setSummaryModel(tool, model: value) }
-        }
-        .onAppear { summaryModel = model.settings.summaryModels[tool.rawValue] ?? "" }
-    }
-
-    private func badge(_ text: String, ok: Bool) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle")
-                .foregroundStyle(ok ? .green : .secondary)
-            Text(text).foregroundStyle(.secondary)
-        }
-        .font(.caption)
-    }
-}
-
 private struct ShortcutsSettings: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
         Form {
             Section {
-                LabeledContent("Skip the current briefing") {
+                LabeledContent {
                     ShortcutRecorder(hotKey: Binding(get: { model.skipShortcut }, set: { model.setSkipShortcut($0) }))
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Skip the current briefing")
+                        Text("Works from any app while Kuma is speaking")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                LabeledContent("Clear all briefings") {
-                    Text("Click the x on the paw bubble").foregroundStyle(.secondary)
+                .padding(.vertical, 6)
+                LabeledContent {
+                    Text("Click the x on the toast")
+                        .foregroundStyle(.secondary)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Clear all briefings")
+                        Text("Stops speaking and empties the queue")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .padding(.vertical, 6)
             }
             Section {
-                Text("Click the shortcut and press a new one. It needs Command, Option or Control, and only works while Kuma is speaking.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Label {
+                    Text("Click the shortcut, then press a new one. It needs Command, Option or Control, so plain Esc stays free for Claude Code.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
             }
         }
         .formStyle(.grouped)
-        .frame(height: 220)
+        .frame(height: 280)
     }
 }
 
@@ -349,7 +138,7 @@ private struct ShortcutRecorder: View {
     @State private var rejected = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Button {
                 recording ? stop() : start()
             } label: {
@@ -362,13 +151,13 @@ private struct ShortcutRecorder: View {
                         KeyCaps(keys: hotKey.symbols)
                     }
                 }
-                .frame(minWidth: 120, minHeight: 24)
-                .padding(.horizontal, 6)
+                .frame(minWidth: 130, minHeight: 30)
+                .padding(.horizontal, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(recording ? 0.08 : 0.03)))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(recording ? KumaTheme.purple : Color.primary.opacity(0.12), lineWidth: recording ? 1.5 : 1))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(recording ? 0.08 : 0.04)))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(recording ? KumaTheme.purple : Color.primary.opacity(0.12), lineWidth: recording ? 1.5 : 1))
             .help(recording ? "Press the new shortcut, Esc cancels" : "Click to record a new shortcut")
             Button {
                 stop()

@@ -170,13 +170,33 @@ final class AppModel: ObservableObject {
     func saveCustomPersona(_ persona: Persona) {
         var saved = persona
         saved.isBuiltIn = false
-        if let index = settings.customPersonas.firstIndex(where: { $0.id == saved.id }) {
+        let preset = PersonaLibrary.builtIns.first { $0.id == saved.id }
+        if let preset, preset.name == saved.name, preset.voice == saved.voice, preset.speed == saved.speed, preset.tone == saved.tone {
+            settings.customPersonas.removeAll { $0.id == saved.id }
+        } else if let index = settings.customPersonas.firstIndex(where: { $0.id == saved.id }) {
             settings.customPersonas[index] = saved
         } else {
             settings.customPersonas.append(saved)
         }
+        if settings.personaId == saved.id {
+            settings.voice = saved.voice
+            settings.speed = saved.speed
+        }
         refreshPersonas()
         persistSettings()
+    }
+
+    func isEditedPreset(_ id: String) -> Bool {
+        PersonaLibrary.builtIns.contains { $0.id == id } && settings.customPersonas.contains { $0.id == id }
+    }
+
+    func restorePreset(_ id: String) {
+        guard let preset = PersonaLibrary.builtIns.first(where: { $0.id == id }) else { return }
+        saveCustomPersona(preset)
+    }
+
+    func testVoice(_ persona: Persona) {
+        enqueue(Briefing(sessionId: "test", project: "Kuma", tool: .other, text: "Kuma here. All of your sessions are in good hands.", priority: .high, voice: persona.voice, speed: persona.speed))
     }
 
     func deletePersona(_ id: String) {
@@ -241,6 +261,55 @@ final class AppModel: ObservableObject {
         return key
     }
 
+    func detectedPath(_ tool: Tool) -> String? {
+        guard let engine else { return mockDetectedPath(tool) }
+        return engine.detectedPath(tool)
+    }
+
+    func setCommandPath(_ tool: Tool, path: String) {
+        let trimmed = path.trimmingCharacters(in: .whitespaces)
+        settings.commandPaths[tool.rawValue] = trimmed.isEmpty ? nil : trimmed
+        persistSettings()
+    }
+
+    func setSummarizerRoute(_ tool: Tool, target: String?) {
+        settings.summarizerRoutes[tool.rawValue] = target == tool.rawValue ? nil : target
+        persistSettings()
+    }
+
+    func saveCustomSummarizer(_ custom: CustomSummarizer) {
+        if let index = settings.customSummarizers.firstIndex(where: { $0.id == custom.id }) {
+            settings.customSummarizers[index] = custom
+        } else {
+            settings.customSummarizers.append(custom)
+        }
+        persistSettings()
+    }
+
+    func deleteCustomSummarizer(_ id: String) {
+        settings.customSummarizers.removeAll { $0.id == id }
+        settings.summarizerRoutes = settings.summarizerRoutes.filter { $0.value != id }
+        persistSettings()
+    }
+
+    func testSummarizer(tool: Tool) async -> String {
+        guard let engine else { return await mockTestSummarizer() }
+        return Self.describe(await engine.testSummarizer(tool: tool))
+    }
+
+    func testSummarizer(custom: CustomSummarizer) async -> String {
+        guard let engine else { return await mockTestSummarizer() }
+        return Self.describe(await engine.testSummarizer(custom: custom))
+    }
+
+    private static func describe(_ result: (text: String?, duration: TimeInterval)) -> String {
+        guard let text = result.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            return "No reply. Check the command, model and login."
+        }
+        let short = text.count > 60 ? String(text.prefix(60)) + "..." : text
+        return "Replied \"\(short)\" in \(String(format: "%.1f", result.duration))s"
+    }
+
     func setSummaryModel(_ tool: Tool, model: String) {
         let trimmed = model.trimmingCharacters(in: .whitespaces)
         settings.summaryModels[tool.rawValue] = trimmed.isEmpty ? nil : trimmed
@@ -291,7 +360,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshPersonas() {
-        personas = builtInPersonas() + settings.customPersonas
+        personas = PersonaLibrary.all(custom: settings.customPersonas)
     }
 
     private func loadInitialState() {
@@ -321,10 +390,6 @@ final class AppModel: ObservableObject {
     private func persistSettings() {
         guard let engine else { return mockPersistSettings() }
         engine.updateSettings(settings)
-    }
-
-    private func builtInPersonas() -> [Persona] {
-        PersonaLibrary.all(custom: []).filter(\.isBuiltIn)
     }
 
     private func testBriefing() -> Briefing {

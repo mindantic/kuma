@@ -141,16 +141,25 @@ public final class CLISummarizer: Summarizing, @unchecked Sendable {
     private let timeout: TimeInterval
     private let template = TemplateSummarizer()
     private let workDir: URL
+    private let commandPaths: [Tool: String]
+    private let routes: [Tool: String]
+    private let customs: [CustomSummarizer]
 
     public init(
         locator: ToolLocator = .shared,
         models: [Tool: String] = [.claude: ClaudeRunner.defaultModel],
         timeout: TimeInterval = 25,
-        runners: [SummaryRunner] = [ClaudeRunner(), OpenCodeRunner(), CursorRunner(), CodexRunner()]
+        runners: [SummaryRunner] = [ClaudeRunner(), OpenCodeRunner(), CursorRunner(), CodexRunner()],
+        commandPaths: [Tool: String] = [:],
+        routes: [Tool: String] = [:],
+        customs: [CustomSummarizer] = []
     ) {
         self.locator = locator
         self.models = models
         self.timeout = timeout
+        self.commandPaths = commandPaths
+        self.routes = routes
+        self.customs = customs
         var map: [Tool: SummaryRunner] = [:]
         for r in runners { map[r.tool] = r }
         self.runners = map
@@ -164,7 +173,42 @@ public final class CLISummarizer: Summarizing, @unchecked Sendable {
         for (k, v) in settings.summaryModels {
             if let t = Tool(rawValue: k), !v.isEmpty { models[t] = v }
         }
-        self.init(locator: locator, models: models)
+        var paths: [Tool: String] = [:]
+        for (k, v) in settings.commandPaths {
+            if let t = Tool(rawValue: k), !v.isEmpty { paths[t] = v }
+        }
+        var routes: [Tool: String] = [:]
+        for (k, v) in settings.summarizerRoutes {
+            if let t = Tool(rawValue: k), !v.isEmpty { routes[t] = v }
+        }
+        self.init(locator: locator, models: models, commandPaths: paths, routes: routes, customs: settings.customSummarizers)
+    }
+
+    public func executable(for tool: Tool) -> String? {
+        if let custom = commandPaths[tool], FileManager.default.isExecutableFile(atPath: custom) { return custom }
+        return locator.path(for: tool)
+    }
+
+    public func resolve(command: String) -> String? {
+        let trimmed = command.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.contains("/") {
+            let expanded = (trimmed as NSString).expandingTildeInPath
+            return FileManager.default.isExecutableFile(atPath: expanded) ? expanded : nil
+        }
+        for dir in locator.fullPATH.split(separator: ":") {
+            let candidate = (String(dir) as NSString).appendingPathComponent(trimmed)
+            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+        }
+        return nil
+    }
+
+    private func runCustom(_ custom: CustomSummarizer, prompt: String) async -> String? {
+        guard let exe = resolve(command: custom.command) else { return nil }
+        let out = await ProcessRunner.run(executable: exe, arguments: custom.argumentList(prompt: prompt), environment: childEnvironment, directory: workDir, timeout: timeout)
+        if out.timedOut { return nil }
+        let text = out.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 
     public static func order(for tool: Tool) -> [Tool] {
@@ -198,8 +242,17 @@ public final class CLISummarizer: Summarizing, @unchecked Sendable {
         let prompt = SummaryPrompt.build(request)
         let base = BriefingPolicy.basePriority(for: request.event.kind) ?? .normal
         let env = childEnvironment
-        for tool in Self.order(for: request.session.tool) {
-            guard let runner = runners[tool], let exe = locator.path(for: tool) else { continue }
+        let route = routes[request.session.tool]
+        if let route, let custom = customs.first(where: { $0.id == route }),
+           let raw = await runCustom(custom, prompt: prompt),
+           var parsed = SummaryParser.parse(raw, base: base) {
+            parsed.say = SummaryParser.firstSentences(parsed.say, 2)
+            parsed.summarizedBy = .other
+            return parsed
+        }
+        let primary = route.flatMap(Tool.init(rawValue:)) ?? request.session.tool
+        for tool in Self.order(for: primary) {
+            guard let runner = runners[tool], let exe = executable(for: tool) else { continue }
             let model = (tool == request.session.tool ? request.model : nil) ?? models[tool]
             let ctx = RunnerContext(executable: exe, environment: env, directory: workDir, deadline: Date().addingTimeInterval(timeout))
             guard let raw = await runner.run(prompt: prompt, model: model, context: ctx),
@@ -213,9 +266,15 @@ public final class CLISummarizer: Summarizing, @unchecked Sendable {
 
     public func runRaw(tool: Tool, prompt: String, model: String? = nil) async -> (text: String?, duration: TimeInterval) {
         let started = Date()
-        guard let runner = runners[tool], let exe = locator.path(for: tool) else { return (nil, 0) }
+        guard let runner = runners[tool], let exe = executable(for: tool) else { return (nil, 0) }
         let ctx = RunnerContext(executable: exe, environment: childEnvironment, directory: workDir, deadline: Date().addingTimeInterval(timeout))
         let text = await runner.run(prompt: prompt, model: model ?? models[tool], context: ctx)
+        return (text, Date().timeIntervalSince(started))
+    }
+
+    public func runRaw(custom: CustomSummarizer, prompt: String) async -> (text: String?, duration: TimeInterval) {
+        let started = Date()
+        let text = await runCustom(custom, prompt: prompt)
         return (text, Date().timeIntervalSince(started))
     }
 }

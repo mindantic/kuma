@@ -34,6 +34,7 @@ struct MenuBarView: View {
             footer
         }
         .frame(width: 400)
+        .background(KumaTheme.surface)
         .tint(KumaTheme.purple)
         .animation(.easeOut(duration: 0.18), value: expanded)
         .animation(.easeOut(duration: 0.18), value: model.current?.id)
@@ -187,9 +188,9 @@ private struct SectionHeader: View {
             Spacer()
         }
         .padding(.horizontal, 14)
-        .padding(.top, 9)
+        .padding(.top, 10)
         .padding(.bottom, 4)
-        .background(.bar)
+        .background(KumaTheme.surface)
     }
 }
 

@@ -32,7 +32,12 @@ public enum PersonaLibrary {
 
     public static func all(custom: [Persona]) -> [Persona] {
         let builtInIds = Set(builtIns.map(\.id))
-        return builtIns + custom.filter { !builtInIds.contains($0.id) }
+        let presets = builtIns.map { preset in
+            guard var edited = custom.first(where: { $0.id == preset.id }) else { return preset }
+            edited.isBuiltIn = true
+            return edited
+        }
+        return presets + custom.filter { !builtInIds.contains($0.id) }
     }
 
     public static func persona(id: String?, custom: [Persona]) -> Persona {

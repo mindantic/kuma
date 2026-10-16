@@ -32,7 +32,7 @@ final class KumaEngine {
     let voice: FallbackVoice
     let queue: BriefingQueue
 
-    private let summarizer: CLISummarizer
+    private var summarizer: CLISummarizer
     private let limiter = SummaryLimiter(limit: 3)
     private var server: EventServer?
     private var cancellables: Set<AnyCancellable> = []
@@ -79,6 +79,10 @@ final class KumaEngine {
     func updateSettings(_ settings: KumaSettings) {
         let previous = settingsStore.settings
         settingsStore.settings = settings
+        if settings.summaryModels != previous.summaryModels || settings.commandPaths != previous.commandPaths
+            || settings.summarizerRoutes != previous.summarizerRoutes || settings.customSummarizers != previous.customSummarizers {
+            summarizer = CLISummarizer(settings: settings)
+        }
         if settings.mode == .disabled, previous.mode != .disabled { queue.clearAll() }
         for (id, prefs) in settings.sessionPrefs where prefs.muted && previous.sessionPrefs[id]?.muted != true {
             silence(sessionId: id)
@@ -91,6 +95,18 @@ final class KumaEngine {
     func enqueueManual(_ briefing: Briefing) {
         queue.enqueue(briefing)
     }
+
+    func detectedPath(_ tool: Tool) -> String? { locator.path(for: tool) }
+
+    func testSummarizer(tool: Tool) async -> (text: String?, duration: TimeInterval) {
+        await summarizer.runRaw(tool: tool, prompt: KumaEngine.testPrompt)
+    }
+
+    func testSummarizer(custom: CustomSummarizer) async -> (text: String?, duration: TimeInterval) {
+        await CLISummarizer(settings: settingsStore.settings).runRaw(custom: custom, prompt: KumaEngine.testPrompt)
+    }
+
+    static let testPrompt = "Reply with exactly the word ok and nothing else."
 
     func refreshTools() {
         guard let model else { return }

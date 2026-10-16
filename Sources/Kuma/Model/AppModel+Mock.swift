@@ -44,6 +44,17 @@ extension AppModel {
         mockRunToolChange(tool) { $0.hookInstalled = false }
     }
 
+    func mockDetectedPath(_ tool: Tool) -> String? {
+        guard toolStatus[tool]?.binaryFound == true else { return nil }
+        let names: [Tool: String] = [.claude: "claude", .opencode: "opencode", .codex: "codex", .cursor: "cursor-agent"]
+        return "/opt/homebrew/bin/\(names[tool] ?? tool.rawValue)"
+    }
+
+    func mockTestSummarizer() async -> String {
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        return "Replied \"ok\" in 0.9s"
+    }
+
     func mockInstallVoice() {
         voiceInstalling = true
         Task { @MainActor in
