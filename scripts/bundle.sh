@@ -5,12 +5,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="0.1.0"
 BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
 INSTALL=0
+UNIVERSAL=0
 
 for arg in "$@"; do
   case "$arg" in
     --install) INSTALL=1 ;;
+    --universal) UNIVERSAL=1 ;;
     -h|--help)
-      echo "usage: scripts/bundle.sh [--install]"
+      echo "usage: scripts/bundle.sh [--install] [--universal]"
       exit 0
       ;;
     *)
@@ -22,10 +24,15 @@ done
 
 cd "$ROOT"
 
-echo "==> swift build -c release"
-swift build -c release --product Kuma
-swift build -c release --product kuma-hook
-BIN_DIR="$(swift build -c release --show-bin-path)"
+ARCH_FLAGS=()
+if [ "$UNIVERSAL" = 1 ]; then
+  ARCH_FLAGS=(--arch arm64 --arch x86_64)
+fi
+
+echo "==> swift build -c release ${ARCH_FLAGS[*]:-}"
+swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --product Kuma
+swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --product kuma-hook
+BIN_DIR="$(swift build -c release ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --show-bin-path)"
 
 APP="$ROOT/build/Kuma.app"
 CONTENTS="$APP/Contents"
