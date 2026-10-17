@@ -35,10 +35,14 @@ public final class FallbackVoice: VoiceEngine, @unchecked Sendable {
     }
 
     public func speak(_ text: String, voice: String, speed: Double) async throws {
+        try await speak(text, voice: voice, speed: speed, onStart: {})
+    }
+
+    public func speak(_ text: String, voice: String, speed: Double, onStart: @escaping @Sendable () -> Void) async throws {
         let token = generation.current
         if isPrimaryReady() {
             do {
-                try await primary.speak(text, voice: voice, speed: speed)
+                try await primary.speak(text, voice: voice, speed: speed, onStart: onStart)
                 return
             } catch is CancellationError {
                 throw CancellationError()
@@ -48,7 +52,7 @@ public final class FallbackVoice: VoiceEngine, @unchecked Sendable {
             }
         }
         guard generation.isCurrent(token) else { throw CancellationError() }
-        try await fallback.speak(text, voice: voice, speed: speed)
+        try await fallback.speak(text, voice: voice, speed: speed, onStart: onStart)
     }
 
     public func stop() {

@@ -44,11 +44,14 @@ final class AppModel: ObservableObject {
     @Published var toolStatus: [Tool: ToolStatus] = [:]
     @Published var voiceReady = false
     @Published var voiceInstalling = false
+    @Published var voiceStep: String?
+    @Published var voiceProgress: Int?
+    @Published var voiceError: String?
     @Published var toolBusy: Set<Tool> = []
     @Published var lastError: String?
     @Published var focusSessionId: String?
     @Published var toastEnabled = UserDefaults.standard.object(forKey: "toastEnabled") as? Bool ?? true
-    @Published var toastStyle = ToastStyle(rawValue: UserDefaults.standard.string(forKey: "toastStyle") ?? "") ?? .full
+    @Published var toastStyle = ToastStyle(rawValue: UserDefaults.standard.string(forKey: "toastStyle") ?? "") ?? .compact
     @Published var skipShortcut: HotKey = AppModel.loadSkipShortcut()
 
     var windowOpener: ((String) -> Void)?
@@ -230,14 +233,31 @@ final class AppModel: ObservableObject {
     func installVoice() {
         guard let engine else { return mockInstallVoice() }
         voiceInstalling = true
+        voiceError = nil
+        voiceStep = "Starting"
+        voiceProgress = nil
         Task { @MainActor in
             do {
-                try await engine.installVoice { _ in }
-                lastError = nil
+                try await engine.installVoice { line in
+                    Task { @MainActor [weak self] in self?.handleVoiceSetupLine(line) }
+                }
             } catch {
-                lastError = "Voice install failed: \(error.localizedDescription)"
+                if voiceError == nil { voiceError = "The voice install failed. Try again." }
             }
             voiceInstalling = false
+            voiceStep = nil
+            voiceProgress = nil
+        }
+    }
+
+    func handleVoiceSetupLine(_ line: String) {
+        if let value = line.removingPrefix("kuma-step: ") {
+            voiceStep = value
+            voiceProgress = nil
+        } else if let value = line.removingPrefix("kuma-progress: "), let percent = Int(value) {
+            voiceProgress = min(max(percent, 0), 100)
+        } else if let value = line.removingPrefix("kuma-error: ") {
+            voiceError = value
         }
     }
 
@@ -415,5 +435,11 @@ enum KumaWindowID {
 extension Briefing {
     func replayCopy() -> Briefing {
         Briefing(sessionId: sessionId, project: project, tool: tool, text: text, priority: .high, voice: voice, speed: speed)
+    }
+}
+
+private extension String {
+    func removingPrefix(_ prefix: String) -> String? {
+        hasPrefix(prefix) ? String(dropFirst(prefix.count)) : nil
     }
 }

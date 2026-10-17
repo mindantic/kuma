@@ -313,4 +313,26 @@ final class VoiceFallbackTests: XCTestCase {
         XCTAssertEqual(KokoroVoices.info(for: "bm_george")?.lang, "en-gb")
         XCTAssertEqual(KokoroVoices.defaultVoice, "am_onyx")
     }
+
+    @MainActor
+    func testAudibleWaitsForPlaybackToStart() async throws {
+        final class SlowStart: VoiceEngine, @unchecked Sendable {
+            func speak(_ text: String, voice: String, speed: Double) async throws {}
+            func speak(_ text: String, voice: String, speed: Double, onStart: @escaping @Sendable () -> Void) async throws {
+                try await Task.sleep(for: .milliseconds(300))
+                onStart()
+                try await Task.sleep(for: .milliseconds(300))
+            }
+            func stop() {}
+        }
+        let queue = BriefingQueue(voice: SlowStart(), gap: .milliseconds(1))
+        queue.enqueue(briefing("a"))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNotNil(queue.current)
+        XCTAssertNil(queue.audible)
+        try await Task.sleep(for: .milliseconds(350))
+        XCTAssertEqual(queue.audible?.text, queue.current?.text)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertNil(queue.audible)
+    }
 }

@@ -50,11 +50,17 @@ public final class KokoroVoice: VoiceEngine, @unchecked Sendable {
     }
 
     public func speak(_ text: String, voice: String, speed: Double) async throws {
+        try await speak(text, voice: voice, speed: speed, onStart: {})
+    }
+
+    public func speak(_ text: String, voice: String, speed: Double, onStart: @escaping @Sendable () -> Void) async throws {
         let token = generation.current
         try await gate.run {
             let url = try await synthesizeLocked(text, voice: voice, speed: speed, token: token)
             defer { try? FileManager.default.removeItem(at: url) }
             let gen = generation
+            guard gen.isCurrent(token) else { throw CancellationError() }
+            onStart()
             try await player.play(url) { gen.isCurrent(token) }
         }
     }

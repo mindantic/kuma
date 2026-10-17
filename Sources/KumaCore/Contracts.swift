@@ -36,7 +36,15 @@ public protocol Summarizing: Sendable {
 
 public protocol VoiceEngine: AnyObject {
     func speak(_ text: String, voice: String, speed: Double) async throws
+    func speak(_ text: String, voice: String, speed: Double, onStart: @escaping @Sendable () -> Void) async throws
     func stop()
+}
+
+extension VoiceEngine {
+    public func speak(_ text: String, voice: String, speed: Double, onStart: @escaping @Sendable () -> Void) async throws {
+        onStart()
+        try await speak(text, voice: voice, speed: speed)
+    }
 }
 
 public struct BriefingDecision: Equatable, Sendable {

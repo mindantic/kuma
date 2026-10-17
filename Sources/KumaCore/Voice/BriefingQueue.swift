@@ -19,6 +19,7 @@ public struct BriefingFinished: Equatable, Sendable {
 @MainActor
 public final class BriefingQueue: ObservableObject {
     @Published public private(set) var current: Briefing?
+    @Published public private(set) var audible: Briefing?
     @Published public private(set) var pending: [Briefing] = []
     @Published public private(set) var isPaused = false
 
@@ -139,7 +140,12 @@ public final class BriefingQueue: ObservableObject {
             onStarted?(item)
             var outcome: BriefingOutcome
             do {
-                try await voice.speak(item.text, voice: item.voice, speed: item.speed)
+                try await voice.speak(item.text, voice: item.voice, speed: item.speed) { [weak self] in
+                    Task { @MainActor in
+                        guard let self, self.current == item else { return }
+                        self.audible = item
+                    }
+                }
                 outcome = interruption ?? .completed
             } catch is CancellationError {
                 outcome = interruption ?? .skipped
@@ -148,6 +154,7 @@ public final class BriefingQueue: ObservableObject {
             }
             interruption = nil
             current = nil
+            audible = nil
             if outcome != .paused {
                 let event = BriefingFinished(briefing: item, outcome: outcome)
                 finished.send(event)

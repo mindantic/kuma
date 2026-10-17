@@ -12,7 +12,7 @@ A native macOS menu bar app that watches every Claude Code, OpenCode, Codex and 
 [![Swift](https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white)](Package.swift)
 [![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-8A2BE2)](#-install)
 [![Voice](https://img.shields.io/badge/voice-Kokoro%2C%20on%20device-FF69B4)](#-voice)
-[![Release](https://img.shields.io/badge/release-v0.1.0-blueviolet)](https://github.com/mindantic/kuma/releases/latest)
+[![Release](https://img.shields.io/badge/release-v0.1.1-blueviolet)](https://github.com/mindantic/kuma/releases/latest)
 
 [Install](#-install)  |  [Features](#-features)  |  [Screenshots](#-screenshots)  |  [Personalities](#-personalities)  |  [How it works](#%EF%B8%8F-how-it-works)  |  [Troubleshooting](#-troubleshooting)
 
@@ -32,7 +32,7 @@ When you run twenty agent sessions at once, the hard part is knowing which one n
 | 🎙️ **Spoken briefings** | One short sentence per update, read in a natural local voice. Briefings queue up and play one after another. |
 | 🚦 **Prioritized** | Approvals, questions and errors jump the queue. Do Not Disturb speaks only what needs you. |
 | 🧭 **Menu bar + dashboard** | Every session sorted by urgency in the menu bar, plus a full dashboard with details, last message and history. |
-| 🍞 **Toasts** | A full or compact toast shows while Kuma speaks. Click to skip, ✕ to clear the queue. |
+| 🍞 **Toasts** | A compact (default) or full toast shows the moment Kuma starts speaking. Click to skip, ✕ to clear the queue. |
 | ⌨️ **Global skip shortcut** | ⌘ Esc by default, recordable in Settings. Plain Esc stays free for your agent. |
 | 🎭 **Personalities** | Kuma, the Straw Hat crew and Jarvis, each with its own voice and way of talking. Make your own too. |
 | 🎛️ **Per session control** | Mute, important only, one line or short summary, personality and voice, which events speak. Per session, per project, or as defaults. |
@@ -62,8 +62,8 @@ Works in iTerm2, Terminal, Ghostty, Orca and other terminals.
 
 <table>
   <tr>
+    <td align="center"><b>Compact toast (default)</b><br><img src="docs/screenshots/toast-compact.png" alt="Compact toast" width="200"></td>
     <td align="center"><b>Full toast</b><br><img src="docs/screenshots/toast-full.png" alt="Full toast" width="420"></td>
-    <td align="center"><b>Compact toast</b><br><img src="docs/screenshots/toast-compact.png" alt="Compact toast" width="200"></td>
   </tr>
 </table>
 
@@ -89,21 +89,43 @@ Works in iTerm2, Terminal, Ghostty, Orca and other terminals.
 
 ## 📦 Install
 
-1. Download **`Kuma-0.1.0.dmg`** from the [latest release](https://github.com/mindantic/kuma/releases/latest).
+### Option 1: Download the app
+
+1. Download the latest **`Kuma-x.y.z.dmg`** from [Releases](https://github.com/mindantic/kuma/releases/latest).
 2. Open it and drag **Kuma** into **Applications**.
 3. Open Kuma. The paw appears in your menu bar.
 
-> [!IMPORTANT]
-> Kuma is signed ad hoc, not notarized, so macOS blocks it the first time. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Or run this once in Terminal:
+> [!WARNING]
+> **macOS will say Kuma "can't be opened" the first time.** Kuma is signed ad hoc and not notarized by Apple, so Gatekeeper blocks it. This happens once:
+>
+> 1. Try to open Kuma, then click **Done** on the warning.
+> 2. Open **System Settings → Privacy & Security**.
+> 3. Scroll down to **Security**, find *"Kuma" was blocked*, and click **Open Anyway**.
+> 4. Confirm with **Open Anyway** and your password.
+>
+> Prefer Terminal? This does the same thing:
 >
 > ```sh
 > xattr -dr com.apple.quarantine /Applications/Kuma.app
 > ```
 
+### Option 2: Build from source
+
+No Gatekeeper prompt, since you build it yourself. Needs macOS 14+ and the Xcode command line tools (`xcode-select --install`).
+
+```sh
+git clone https://github.com/mindantic/kuma.git
+cd kuma
+scripts/bundle.sh --install
+open ~/Applications/Kuma.app
+```
+
+This builds a release version, signs it ad hoc and installs it to `~/Applications/Kuma.app`. Run the same commands again after a `git pull` to update.
+
 ### First run
 
 1. **Tools:** open **Settings → Tools**, pick each tool you use and click **Install hooks**. Restart running agent sessions so they pick up the hooks.
-2. **Voice:** open **Settings → Personality**. If the voice engine shows *Not installed*, click **Install**. It downloads Kokoro (about 340 MB) once.
+2. **Voice:** click **Install** on the *Voice not installed* banner in the menu, or in **Settings → Personality**. It downloads Kokoro (about 340 MB) once, with progress shown as it goes. Nothing else is needed: if Python isn't on your Mac, Kuma fetches its own copy.
 3. **Personality:** pick one, click **Use this personality** and **Test voice**.
 
 That's it. The next time an agent stops, asks or needs approval, Kuma tells you.
@@ -128,7 +150,9 @@ Every preset can be edited in place and restored later. Add your own with **+**.
 
 ## 🗣 Voice
 
-Kuma speaks with [Kokoro](https://github.com/thewh1teagle/kokoro-onnx), a small text to speech model that runs on your Mac. Nothing you hear is sent anywhere. The installer needs [uv](https://docs.astral.sh/uv/) or Python 3.11+ and puts everything in `~/Library/Application Support/Kuma/voice`.
+Kuma speaks with [Kokoro](https://github.com/thewh1teagle/kokoro-onnx), a small text to speech model that runs on your Mac. Nothing you hear is sent anywhere.
+
+The installer sets up everything in `~/Library/Application Support/Kuma/voice`. It uses [uv](https://docs.astral.sh/uv/) if you have it, otherwise it downloads uv and a private Python 3.12 into that folder. Your system Python and shell config are never touched. Until the voice is installed, Kuma uses the built in macOS voice.
 
 ## ⚙️ How it works
 
@@ -163,16 +187,9 @@ Remove the hooks any time from **Settings → Tools**.
 - **No Accessibility permission.** The skip shortcut is a Carbon hot key, registered only while Kuma speaks.
 - **Launch at login** uses the system login items service. Review it in **System Settings → General → Login Items**.
 
-## 🛠 Build from source
+## 🛠 Development
 
-Needs macOS 14+ and the Xcode command line tools with Swift 5.10 or later.
-
-```sh
-git clone https://github.com/mindantic/kuma.git
-cd kuma
-scripts/bundle.sh --install      # build, sign ad hoc, install to ~/Applications
-open ~/Applications/Kuma.app
-```
+See [Build from source](#option-2-build-from-source) to install. Swift 5.10 or later.
 
 | Command | What it does |
 | --- | --- |

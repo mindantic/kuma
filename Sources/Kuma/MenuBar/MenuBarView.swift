@@ -25,6 +25,13 @@ struct MenuBarView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            if !model.voiceReady {
+                Divider()
+                VoiceEngineStatus(model: model)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color.orange.opacity(0.08))
+            }
             if let current = model.current {
                 NowSpeaking(model: model, briefing: current)
             }

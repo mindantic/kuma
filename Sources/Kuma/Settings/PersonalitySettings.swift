@@ -62,7 +62,7 @@ struct PersonalitySettings: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             Divider()
-            engineStatus
+            VoiceEngineStatus(model: model)
                 .padding(10)
         }
     }
@@ -84,26 +84,6 @@ struct PersonalitySettings: View {
         }
         .padding(.vertical, 2)
         .tag(persona.id)
-    }
-
-    private var engineStatus: some View {
-        HStack(spacing: 8) {
-            Image(systemName: model.voiceReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundStyle(model.voiceReady ? .green : .orange)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Voice engine").font(.caption.weight(.semibold))
-                Text(model.voiceReady ? "Installed, runs on this Mac" : "Not installed")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 4)
-            if model.voiceInstalling {
-                ProgressView().controlSize(.small)
-            } else if !model.voiceReady {
-                Button("Install") { model.installVoice() }
-                    .controlSize(.small)
-            }
-        }
     }
 
     private var isActive: Bool { draft.id == model.settings.personaId }

@@ -57,7 +57,7 @@ final class KumaEngine {
             .receive(on: RunLoop.main)
             .sink { [weak model] in model?.sessions = $0 }
             .store(in: &cancellables)
-        queue.$current
+        queue.$audible
             .receive(on: RunLoop.main)
             .sink { [weak model] in model?.current = $0 }
             .store(in: &cancellables)

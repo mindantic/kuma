@@ -9,7 +9,14 @@ extension AppModel {
         refreshPersonas()
         toolStatus = MockData.toolStatus
         recentBriefings = MockData.recentBriefings(from: sessions, voice: settings.voice)
-        voiceReady = true
+        let noVoice = ProcessInfo.processInfo.environment["KUMA_MOCK_NO_VOICE"]
+        voiceReady = noVoice == nil
+        if noVoice == "install" {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                mockInstallVoice()
+            }
+        }
     }
 
     func mockPersistSettings() {}
@@ -57,10 +64,16 @@ extension AppModel {
 
     func mockInstallVoice() {
         voiceInstalling = true
+        voiceError = nil
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            for line in ["kuma-step: Setting up Python", "kuma-step: Downloading the voice model", "kuma-progress: 35", "kuma-progress: 80", "kuma-step: Checking the voice"] {
+                handleVoiceSetupLine(line)
+                try? await Task.sleep(nanoseconds: 700_000_000)
+            }
             voiceInstalling = false
-            voiceReady = true
+            voiceStep = nil
+            voiceProgress = nil
+            voiceReady = voiceError == nil
         }
     }
 
