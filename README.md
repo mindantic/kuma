@@ -12,7 +12,7 @@ A native macOS menu bar app that watches every Claude Code, OpenCode, Codex and 
 [![Swift](https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white)](Package.swift)
 [![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-8A2BE2)](#-install)
 [![Voice](https://img.shields.io/badge/voice-Kokoro%2C%20on%20device-FF69B4)](#-voice)
-[![Release](https://img.shields.io/badge/release-v0.1.1-blueviolet)](https://github.com/mindantic/kuma/releases/latest)
+[![Release](https://img.shields.io/badge/release-v0.1.2-blueviolet)](https://github.com/mindantic/kuma/releases/latest)
 
 [Install](#-install)  |  [Features](#-features)  |  [Screenshots](#-screenshots)  |  [Personalities](#-personalities)  |  [How it works](#%EF%B8%8F-how-it-works)  |  [Troubleshooting](#-troubleshooting)
 

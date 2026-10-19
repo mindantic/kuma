@@ -37,6 +37,8 @@ final class KumaEngine {
     private var server: EventServer?
     private var cancellables: Set<AnyCancellable> = []
     private var housekeeping: Timer?
+    private var gate = AttentionGate()
+    private var latest: [String: UUID] = [:]
     private weak var model: AppModel?
 
     init() {
@@ -168,22 +170,27 @@ final class KumaEngine {
 
     func process(_ event: AgentEvent) {
         let session = sessionStore.apply(event)
-        guard !session.isScratch else { return }
+        guard !session.isScratch, gate.admit(event) else { return }
         let settings = settingsStore.settings
         let prefs = settings.prefs(sessionId: session.id, project: session.project)
         let decision = BriefingPolicy.decide(event: event, session: session, prefs: prefs, mode: settings.mode, watched: settings.watchedTools)
         guard decision.shouldBrief else { return }
+        let token = UUID()
+        latest[session.id] = token
         let persona = PersonaLibrary.persona(id: prefs.personaId ?? settings.personaId, custom: settings.customPersonas)
         let request = SummaryRequest(session: session, event: event, persona: persona, verbosity: prefs.verbosity, model: settings.summaryModels[session.tool.rawValue])
         let summarizer = self.summarizer
         let limiter = self.limiter
         Task { [weak self] in
             let result = await limiter.run { await summarizer.summarize(request) }
-            self?.deliver(result, session: session, base: decision.basePriority, persona: persona)
+            self?.deliver(result, session: session, kind: event.kind, token: token, base: decision.basePriority, persona: persona)
         }
     }
 
-    private func deliver(_ result: SummaryResult, session: Session, base: Priority, persona: Persona) {
+    private func deliver(_ result: SummaryResult, session: Session, kind: EventKind, token: UUID, base: Priority, persona: Persona) {
+        guard latest[session.id] == token else { return }
+        latest[session.id] = nil
+        if kind == .question || kind == .permission, !gate.isWaiting(sessionId: session.id) { return }
         let text = result.say.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         sessionStore.setSummary(sessionId: session.id, text: text)

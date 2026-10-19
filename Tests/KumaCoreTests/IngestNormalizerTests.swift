@@ -87,9 +87,23 @@ final class IngestNormalizerTests: XCTestCase {
         let n = try XCTUnwrap(one(ClaudeNormalizer(readTranscript: false).normalize(envelope(.claude, "Notification", note))))
         XCTAssertEqual(n.kind, .permission)
         XCTAssertEqual(n.detail, "Claude needs your permission to use Bash")
+        XCTAssertTrue(n.reminder)
+        XCTAssertFalse(e.reminder)
 
         let idle = #"{"session_id":"s","cwd":"/p","hook_event_name":"Notification","notification_type":"idle_prompt","message":"Claude is waiting for your input"}"#
         XCTAssertTrue(ClaudeNormalizer(readTranscript: false).normalize(envelope(.claude, "Notification", idle)).isEmpty)
+    }
+
+    func testClaudePermissionRequestMatchesPreToolUseForQuestionsAndPlans() throws {
+        let n = ClaudeNormalizer(readTranscript: false)
+        for tool in ["AskUserQuestion", "ExitPlanMode"] {
+            let input = tool == "AskUserQuestion" ? #"{"questions":[{"question":"Which database?"}]}"# : #"{"plan":"Add table"}"#
+            let pre = #"{"session_id":"s","cwd":"/p","tool_name":"\#(tool)","tool_input":\#(input)}"#
+            let a = try XCTUnwrap(one(n.normalize(envelope(.claude, "PreToolUse", pre))))
+            let b = try XCTUnwrap(one(n.normalize(envelope(.claude, "PermissionRequest", pre))))
+            XCTAssertEqual(a.kind, b.kind, tool)
+            XCTAssertEqual(a.detail, b.detail, tool)
+        }
     }
 
     func testClaudeOtherEvents() throws {

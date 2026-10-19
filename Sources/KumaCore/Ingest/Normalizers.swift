@@ -83,6 +83,7 @@ public struct ClaudeNormalizer: EventNormalizing {
         var message: String?
         var detail: String?
         var agentType = NormalizeKit.text(p["agent_type"])
+        var reminder = false
         switch name {
         case "SessionStart":
             kind = .sessionStart
@@ -90,29 +91,11 @@ public struct ClaudeNormalizer: EventNormalizing {
             kind = .prompt
             detail = NormalizeKit.clip(NormalizeKit.text(p["prompt"]), 2000)
         case "PreToolUse":
-            let tool = NormalizeKit.text(p["tool_name"])
-            switch tool {
-            case "AskUserQuestion":
-                kind = .question
-                detail = NormalizeKit.questions(p["tool_input"])
-            case "ExitPlanMode":
-                kind = .permission
-                let plan = NormalizeKit.clip(NormalizeKit.text(p["tool_input"]?["plan"]), 600)
-                detail = plan.map { "Plan approval: \($0)" } ?? "Plan approval"
-            default:
-                kind = .toolUse
-                detail = NormalizeKit.describeTool(name: tool, input: p["tool_input"])
-            }
+            (kind, detail) = Self.toolEvent(p, fallback: .toolUse)
         case "PermissionRequest":
-            let tool = NormalizeKit.text(p["tool_name"])
-            if tool == "AskUserQuestion" {
-                kind = .question
-                detail = NormalizeKit.questions(p["tool_input"])
-            } else {
-                kind = .permission
-                detail = NormalizeKit.describeTool(name: tool, input: p["tool_input"])
-            }
+            (kind, detail) = Self.toolEvent(p, fallback: .permission)
         case "Notification":
+            reminder = true
             switch NormalizeKit.text(p["notification_type"]) {
             case "permission_prompt":
                 kind = .permission
@@ -162,8 +145,22 @@ public struct ClaudeNormalizer: EventNormalizing {
             detail: detail,
             agentType: agentType,
             terminal: TerminalDetector.name(env: envelope.env),
+            reminder: reminder,
             timestamp: envelope.receivedAt
         )]
+    }
+
+    private static func toolEvent(_ p: JSONValue, fallback: EventKind) -> (EventKind, String?) {
+        let tool = NormalizeKit.text(p["tool_name"])
+        switch tool {
+        case "AskUserQuestion":
+            return (.question, NormalizeKit.questions(p["tool_input"]))
+        case "ExitPlanMode":
+            let plan = NormalizeKit.clip(NormalizeKit.text(p["tool_input"]?["plan"]), 600)
+            return (.permission, plan.map { "Plan approval: \($0)" } ?? "Plan approval")
+        default:
+            return (fallback, NormalizeKit.describeTool(name: tool, input: p["tool_input"]))
+        }
     }
 }
 

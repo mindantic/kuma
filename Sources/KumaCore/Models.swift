@@ -104,9 +104,10 @@ public struct AgentEvent: Codable, Sendable {
     public var detail: String?
     public var agentType: String?
     public var terminal: String?
+    public var reminder: Bool
     public var timestamp: Date
 
-    public init(sessionId: String, tool: Tool, kind: EventKind, cwd: String, model: String? = nil, title: String? = nil, message: String? = nil, detail: String? = nil, agentType: String? = nil, terminal: String? = nil, timestamp: Date = Date()) {
+    public init(sessionId: String, tool: Tool, kind: EventKind, cwd: String, model: String? = nil, title: String? = nil, message: String? = nil, detail: String? = nil, agentType: String? = nil, terminal: String? = nil, reminder: Bool = false, timestamp: Date = Date()) {
         self.sessionId = sessionId
         self.tool = tool
         self.kind = kind
@@ -117,6 +118,7 @@ public struct AgentEvent: Codable, Sendable {
         self.detail = detail
         self.agentType = agentType
         self.terminal = terminal
+        self.reminder = reminder
         self.timestamp = timestamp
     }
 
